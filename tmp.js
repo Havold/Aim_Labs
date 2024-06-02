@@ -9,6 +9,7 @@ import * as TWEEN from "@tweenjs/tween.js";
 var scene, camera, renderer, mesh;
 var ambientLight, light;
 var meshFloor;
+var crate, crateTexture, crateNormalMap, crateBumpMap;
 
 var keyboard = {};
 var player = { height: 1.8, speed: 0.2, turnSpeed: Math.PI * 0.02 };
@@ -43,6 +44,24 @@ function init() {
     light.shadow.camera.near = 0.1;
     light.shadow.camera.far = 25;
     scene.add(light);
+
+    var textureLoader = new THREE.TextureLoader();
+    crateTexture = textureLoader.load('./assets/crate/crate0_diffuse.png');
+    crateBumpMap = textureLoader.load('./assets/crate/crate0_bump.png');
+    crateNormalMap = textureLoader.load('./assets/crate/crate0_normal.png');
+    
+    crate = new THREE.Mesh(
+        new THREE.BoxGeometry(3, 3, 3),
+        new THREE.MeshPhongMaterial({ 
+            color: 0xffffff,
+            wireframe: false, 
+            map: crateTexture,
+            bumpMap: crateBumpMap,
+            normalMap: crateNormalMap
+         }),
+    );
+    crate.position.set(2, 3 / 2, 2);
+    scene.add(crate);
 
     camera.position.set(0, player.height, -5);
     camera.lookAt(new THREE.Vector3(0, player.height, 0));
@@ -81,6 +100,14 @@ function animate() {
         camera.position.x += Math.sin(camera.rotation.y - Math.PI / 2) * player.speed;
         camera.position.z += -Math.cos(camera.rotation.y - Math.PI / 2) * player.speed;
     }
+
+    if (keyboard[37]) { // left arrow key
+        camera.rotation.y -= player.turnSpeed;
+    }
+
+    if (keyboard[39]) { // right arrow key
+        camera.rotation.y += player.turnSpeed;
+    }   
 
     renderer.render(scene, camera);
 }
