@@ -1,0 +1,7 @@
+Kính chào thầy,
+Do file node_modules của em quá nặng nên không thể nộp được nên em xin phép được viết file readme này
+để trình bày cách để chạy được chương trình. (Cần phải đảm bảo là npm đã được install trong VSCode)
+- Bước 1: Chạy câu lệnh dưới đây với terminal trong folder đang làm việc để cài đặt các thứ viện cần thiết
+ npm install --save-dev vite
+- Bước 2: Chạy câu lệnh 'npx vite' và xem chương trình được chạy thông qua tên miền mà ta thu được sau khi
+chạy.
