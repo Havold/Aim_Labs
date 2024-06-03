@@ -34,6 +34,12 @@ var jumpVelocity = 0;
 
 var RESOURCES_LOADED = false;
 
+// Audio variables
+var listener, sound, audioLoader, footstepSound;
+
+// var footstepSounds = [];
+// var currentFootstepSound = 0, footstepInterval;
+
 // Models index
 var models = {
     tree: {
@@ -63,8 +69,6 @@ var models = {
     }
 };
 
-
-
 // Meshes index
 var meshes = {};
 
@@ -72,6 +76,24 @@ var meshes = {};
 function init() {
     scene = new THREE.Scene();
     camera = new THREE.PerspectiveCamera(90, window.innerWidth / window.innerHeight, 0.1, 1000);
+
+    // Audio listener
+    listener = new THREE.AudioListener();
+    camera.add(listener);
+
+    // Audio loader
+    audioLoader = new THREE.AudioLoader();
+
+
+    // Load footstep sound
+    footstepSound = new THREE.Audio(listener);
+    audioLoader.load('./assets/sounds/footstep.mp3', function(buffer) {
+        footstepSound.setBuffer(buffer);
+        footstepSound.setLoop(false); // Set to loop
+        footstepSound.setVolume(0); // Start with volume 0
+        footstepSound.play(); // Start playing immediately but with 0 volume
+    });
+
 
     loadingScreen.box.position.set(0, 0, 5);
     loadingScreen.camera.lookAt(loadingScreen.box.position);
@@ -281,6 +303,26 @@ function animate() {
         bullets[index].position.add(bullets[index].velocity);
     }
 
+    // // Play footstep sound if the player is moving
+    // if (keyboard[87] || keyboard[65] || keyboard[83] || keyboard[68]) { // W, A, S, D keys
+    //     if (!footstepSound.isPlaying) {
+    //         footstepSound.play();
+    //     }
+    // } else {
+    //     if (footstepSound.isPlaying) {
+    //         footstepSound.stop();
+    //     }
+    // }    
+
+    let isMoving = keyboard[87] || keyboard[65] || keyboard[83] || keyboard[68]; // W, A, S, D keys
+
+    // Adjust footstep sound volume based on movement
+    if (isMoving) {
+        if (footstepSound) footstepSound.setVolume(0.5);
+    } else {
+        if (footstepSound) footstepSound.setVolume(0);
+    }
+
     if (keyboard[87]) { // W key
         controls.moveForward(player.speed);
     }
@@ -299,6 +341,7 @@ function animate() {
     if (keyboard[32] && !isJumping) { // Space key
         isJumping = true;
         jumpVelocity = 0.5; // Đặt vận tốc ban đầu khi nhảy
+        playJumpSound();
     }
 
     document.addEventListener('pointerdown', (event) => {
@@ -335,6 +378,9 @@ function animate() {
             bullets.push(bullet);
 
             scene.add(bullet);
+
+            // Play gunshot sound
+            playGunshotSound();
         }
     })
 
@@ -398,6 +444,26 @@ function onResourcesLoaded() {
     scene.add(meshes["playerWeapon"]);
     
 }  
+
+// Play gunshot sound
+function playGunshotSound() {
+    sound = new THREE.Audio(listener);
+    audioLoader.load('./assets/sounds/laser-gun.mp3', function(buffer) {
+        sound.setBuffer(buffer);
+        sound.setVolume(0.5);
+        sound.play();
+    });
+}
+
+function playJumpSound() {
+    sound = new THREE.Audio(listener);
+    audioLoader.load('./assets/sounds/jump.mp3', function(buffer) {
+        sound.setBuffer(buffer);
+        sound.setVolume(0.5);
+        sound.play();
+    });
+
+}
 
 // Ánh sáng mặt trời
 function getDirectionLight(intensity) {
