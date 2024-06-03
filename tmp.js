@@ -72,6 +72,16 @@ var models = {
 // Meshes index
 var meshes = {};
 
+var crateId, intersects;
+
+const mousePosition = new THREE.Vector2();
+
+window.addEventListener('mousemove', (event) => {
+    mousePosition.x = (event.clientX / window.innerWidth) * 2 - 1;
+    mousePosition.y = -(event.clientY / window.innerHeight) * 2 + 1;
+});
+
+const raycaster = new THREE.Raycaster();
 
 function init() {
     scene = new THREE.Scene();
@@ -175,6 +185,7 @@ function init() {
          }),
     );
     crate.position.set(2, 3 / 2, 2);
+    crateId = crate.id;
     scene.add(crate);
 
     
@@ -413,7 +424,12 @@ function animate() {
     );
     
     if (player.canShoot>0)
-        player.canShoot -= 1;    
+        player.canShoot -= 1;
+    
+    raycaster.setFromCamera(mousePosition, camera);
+    intersects = raycaster.intersectObjects(scene.children);
+    console.log(intersects);
+
     renderer.render(scene, camera);
 }
 
@@ -453,6 +469,14 @@ function playGunshotSound() {
         sound.setVolume(0.5);
         sound.play();
     });
+
+    for (let i=0;i<intersects.length;i++) {
+        if (intersects[i].object.id === crateId) {
+            scene.remove(intersects[i].object);
+        }
+    }
+
+    console.log(crateId);
 }
 
 function playJumpSound() {
@@ -462,7 +486,6 @@ function playJumpSound() {
         sound.setVolume(0.5);
         sound.play();
     });
-
 }
 
 // Ánh sáng mặt trời
