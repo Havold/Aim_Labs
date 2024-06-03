@@ -18,6 +18,7 @@ var crate, crateTexture, crateNormalMap, crateBumpMap;
 
 var keyboard = {};
 var player = { height: 1.8, speed: 0.2, turnSpeed: Math.PI * 0.02 };
+var bullets = [];
 
 var loadingScreen = {
     scene: new THREE.Scene(),
@@ -48,6 +49,11 @@ var models = {
     stones: {
         obj: './assets/models/stones.obj',
         mtl: './assets/models/stones.mtl',
+        mesh: null
+    },
+    blasterA: {
+        obj: './assets/models/Blaster/blasterA.obj',
+        mtl: './assets/models/Blaster/blasterA.mtl',
         mesh: null
     }
 };
@@ -244,6 +250,16 @@ function animate() {
     mesh.rotation.x += 0.01;
     mesh.rotation.y += 0.02;
 
+    for (var index=0; index<bullets.length; index+=1) {
+        if (bullets[index] === undefined) continue;
+        if (bullets[index].alive == false) {
+            bullets.splice(index, 1);
+            continue;
+        }
+
+        bullets[index].position.add(bullets[index].velocity);
+    }
+
     if (keyboard[87]) { // W key
         controls.moveForward(player.speed);
     }
@@ -264,6 +280,37 @@ function animate() {
         jumpVelocity = 0.5; // Đặt vận tốc ban đầu khi nhảy
     }
 
+    document.addEventListener('pointerdown', (event) => {
+        if (event.pointerType === 'mouse' && event.button === 0) {
+            var bullet = new THREE.Mesh(
+                new THREE.SphereGeometry(0.05, 8, 8),
+                new THREE.MeshBasicMaterial({ color: 0xffffff })
+            );
+
+            bullet.position.set(
+                meshes["playerWeapon"].position.x,
+                meshes["playerWeapon"].position.y,
+                meshes["playerWeapon"].position.z
+            );
+
+            bullet.velocity = new THREE.Vector3(
+                -Math.sin(controls.getObject().rotation.y),
+                0,
+                Math.cos(controls.getObject().rotation.y)
+            );
+            
+            bullet.alive = true;
+            setTimeout(function() {
+                bullet.alive = false;
+                scene.remove(bullet);
+            }, 1000);
+
+            bullets.push(bullet);
+
+            scene.add(bullet);
+        }
+    })
+
     if (isJumping) {
         // cập nhật vị trí của nhân vật
         controls.getObject().position.y += jumpVelocity;
@@ -278,6 +325,21 @@ function animate() {
             isJumping = false;
         }
     }
+
+    // position the gun in front of the controls
+    meshes["playerWeapon"].position.set(
+        controls.getObject().position.x - Math.sin(controls.getObject().rotation.y + Math.PI / 6) * 0.75,
+        controls.getObject().position.y - 0.5,
+        controls.getObject().position.z + Math.cos(controls.getObject().rotation.y + Math.PI / 6) * 0.75
+    );
+
+    meshes["playerWeapon"].rotation.set(
+        controls.getObject().rotation.x,
+        controls.getObject().rotation.y,
+        controls.getObject().rotation.z 
+    );
+    
+    console.log(controls.getObject().rotation.x, controls.getObject().rotation.y, controls.getObject().rotation.z);
 
     renderer.render(scene, camera);
 }
@@ -294,13 +356,19 @@ function keyUp(event) {
 function onResourcesLoaded() {
     meshes["tree1"] = models.tree.mesh.clone();
     meshes["tree2"] = models.tree.mesh.clone();
-    
     meshes["tree1"].position.set(-5, 0, 4);
     meshes["tree1"].scale.set(6, 6, 6);
     meshes["tree2"].position.set(1, 0, 4);
     meshes["tree2"].scale.set(6, 6, 6);
+
+    meshes["playerWeapon"] = models.blasterA.mesh.clone();
+    meshes["playerWeapon"].position.set(9, 0, 4);
+    meshes["playerWeapon"].scale.set(1,1 , 1);
+
+
     scene.add(meshes["tree1"]);
     scene.add(meshes["tree2"]);
+    scene.add(meshes["playerWeapon"]);
     
 }  
 
