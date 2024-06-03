@@ -17,7 +17,7 @@ var meshFloor;
 var crate, crateTexture, crateNormalMap, crateBumpMap;
 
 var keyboard = {};
-var player = { height: 1.8, speed: 0.2, turnSpeed: Math.PI * 0.02 };
+var player = { height: 1.8, speed: 0.2, turnSpeed: Math.PI * 0.02, canShoot: 0 };
 var bullets = [];
 
 var loadingScreen = {
@@ -55,8 +55,15 @@ var models = {
         obj: './assets/models/Blaster/blasterA.obj',
         mtl: './assets/models/Blaster/blasterA.mtl',
         mesh: null
+    },
+    blasterB: {
+        obj: './assets/models/Blaster/blasterB.obj',
+        mtl: './assets/models/Blaster/blasterB.mtl',
+        mesh: null
     }
 };
+
+
 
 // Meshes index
 var meshes = {};
@@ -203,6 +210,20 @@ function init() {
 
     document.body.appendChild(renderer.domElement);
 
+    // Add crosshair
+    const crosshair = document.createElement('div');
+    crosshair.style.position = 'absolute';
+    crosshair.style.width = '10px';
+    crosshair.style.height = '10px';
+    crosshair.style.color = '#ffffff';
+    // crosshair.style.backgroundSize = 'cover';
+    crosshair.style.background = 'red';
+    crosshair.style.borderRadius = '50%';
+    crosshair.style.left = '50%';
+    crosshair.style.top = '50%';
+    crosshair.style.transform = 'translate(-50%, -50%)';
+    document.body.appendChild(crosshair);
+
 
     controls = new PointerLockControls(camera, renderer.domElement);
     
@@ -281,23 +302,29 @@ function animate() {
     }
 
     document.addEventListener('pointerdown', (event) => {
-        if (event.pointerType === 'mouse' && event.button === 0) {
+        if (event.pointerType === 'mouse' && event.button === 0 && player.canShoot <= 0) {
+            player.canShoot = 10;
             var bullet = new THREE.Mesh(
                 new THREE.SphereGeometry(0.05, 8, 8),
                 new THREE.MeshBasicMaterial({ color: 0xffffff })
             );
 
+            var vector = new THREE.Vector3(0,0,-1);
+            vector.applyQuaternion(controls.getObject().quaternion);
+
             bullet.position.set(
-                meshes["playerWeapon"].position.x,
-                meshes["playerWeapon"].position.y,
-                meshes["playerWeapon"].position.z
+                meshes["playerWeapon"].position.x + vector.x,
+                meshes["playerWeapon"].position.y + vector.y,
+                meshes["playerWeapon"].position.z + vector.z
             );
 
-            bullet.velocity = new THREE.Vector3(
-                -Math.sin(controls.getObject().rotation.y),
-                0,
-                Math.cos(controls.getObject().rotation.y)
-            );
+            bullet.velocity = vector;
+
+            // bullet.velocity = new THREE.Vector3(
+            //     -Math.sin(controls.getObject().rotation.y),
+            //     0,
+            //     Math.cos(controls.getObject().rotation.y)
+            // );
             
             bullet.alive = true;
             setTimeout(function() {
@@ -339,8 +366,8 @@ function animate() {
         controls.getObject().rotation.z 
     );
     
-    console.log(controls.getObject().rotation.x, controls.getObject().rotation.y, controls.getObject().rotation.z);
-
+    if (player.canShoot>0)
+        player.canShoot -= 1;    
     renderer.render(scene, camera);
 }
 
@@ -361,7 +388,7 @@ function onResourcesLoaded() {
     meshes["tree2"].position.set(1, 0, 4);
     meshes["tree2"].scale.set(6, 6, 6);
 
-    meshes["playerWeapon"] = models.blasterA.mesh.clone();
+    meshes["playerWeapon"] = models.blasterB.mesh.clone();
     meshes["playerWeapon"].position.set(9, 0, 4);
     meshes["playerWeapon"].scale.set(1,1 , 1);
 
