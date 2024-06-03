@@ -208,6 +208,21 @@ function init() {
     window.addEventListener("keydown", keyDown);
     window.addEventListener("keyup", keyUp);
 
+
+    //   Canvas Responsive
+    window.addEventListener("resize", function () {
+        // Cập nhật tỉ lệ khung hình của camera để phản ánh tỉ lệ khung hình mới
+        // của cửa sổ sau khi thay đổi kích thước.
+        camera.aspect = window.innerWidth / window.innerHeight;
+        // Cập nhật ma trận chiếu của camera. Khi thay dổi các thuộc tính của camera
+        // như tỷ lệ khung hình, ta cần gọi phương thức này để camera có thể hiển thị đúng.
+        camera.updateProjectionMatrix();
+        // Cập nhật kích thước của canvas renderer để phẩn ánh kích thước mới của cửa sổ.
+        // Điều này đảm bảo rằng bảng vẽ sẽ lắp đầy toàn bộ không gian của cửa sổ sau khi
+        // thay đổi kích thước.
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
     animate();
 }
 
