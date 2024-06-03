@@ -71,8 +71,9 @@ var models = {
 
 // Meshes index
 var meshes = {};
+var spheres = []; // Danh sách các hình cầu
 
-var crateId, intersects;
+var crateId, intersects, boxId;
 
 const mousePosition = new THREE.Vector2();
 
@@ -142,6 +143,7 @@ function init() {
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     scene.add(mesh);
+    boxId = mesh.id;
 
     meshFloor = new THREE.Mesh(
         new THREE.PlaneGeometry(100, 100, 10, 10),
@@ -425,11 +427,20 @@ function animate() {
     
     if (player.canShoot>0)
         player.canShoot -= 1;
+
+    // Kiểm tra va chạm giữa đạn và hình cầu
+    for (let i=0; i<bullets.length; i++) {
+        if (bullets[i].alive == false) continue;
+        if (checkCollision(bullets[i])) {
+            scene.remove(bullets[i]);
+            bullets[i].alive = false;
+        }
+    }
     
     raycaster.setFromCamera(mousePosition, camera);
     intersects = raycaster.intersectObjects(scene.children);
     console.log(intersects);
-
+    // moveSphere();
     renderer.render(scene, camera);
 }
 
@@ -439,6 +450,33 @@ function keyDown(event) {
 
 function keyUp(event) {
     keyboard[event.keyCode] = false;
+}
+
+// Hàm tạo và đặt Sphere ở vị trí ngẫu nhiên
+function createSphere() {
+    var sphereGeometry = new THREE.SphereGeometry(1, 32, 32);
+    var sphereMaterial = new THREE.MeshPhongMaterial({ color: 0xff0000 });
+    var sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
+
+    // Đặt vị trí ngẫu nhiên cho Sphere
+    sphere.position.set(
+        Math.random() * 10 - 5,
+        Math.random() * 5,
+        Math.random() * 10 - 5
+    );
+
+    scene.add(sphere);
+    spheres.push(sphere);
+}
+
+setInterval(createSphere, 4000);
+
+// Di chuyên các Sphere theo hướng mong muốn
+function moveSphere() {
+    for (var i=0; i<spheres.length; i++) {
+        spheres[i].position.x += 0.1;
+    }
+
 }
 
 // Run when all resources are loaded
@@ -466,17 +504,23 @@ function playGunshotSound() {
     sound = new THREE.Audio(listener);
     audioLoader.load('./assets/sounds/laser-gun.mp3', function(buffer) {
         sound.setBuffer(buffer);
-        sound.setVolume(0.5);
+        sound.setVolume(0.3);
         sound.play();
     });
 
     for (let i=0;i<intersects.length;i++) {
-        if (intersects[i].object.id === crateId) {
+        // spheres.map((sphere) => {
+        //     if (intersects[i].object.id==sphere ) {
+        //         scene.remove(intersects[i].object);
+        //     }
+        // })
+        if (intersects[i].object.id==crateId || intersects[i].object.id==boxId) {
             scene.remove(intersects[i].object);
         }
+
     }
 
-    console.log(crateId);
+    console.log(spheres);
 }
 
 function playJumpSound() {
@@ -486,6 +530,21 @@ function playJumpSound() {
         sound.setVolume(0.5);
         sound.play();
     });
+}
+
+function checkCollision(bullet) {
+    for (let i = 0; i < spheres.length; i++) {
+        const sphere = spheres[i];
+        const distance = bullet.position.distanceTo(sphere.position);
+        if (distance < 1) { // Kiểm tra va chạm
+            // Xóa cả hình cầu và đạn khỏi cảnh
+            scene.remove(sphere);
+            spheres.splice(i, 1);
+            scene.remove(bullet);
+            return true;
+        }
+    }
+    return false;
 }
 
 // Ánh sáng mặt trời
