@@ -7,8 +7,11 @@ import { createNoise2D } from "simplex-noise";
 import * as TWEEN from "@tweenjs/tween.js";
 import { MTLLoader } from "three/examples/jsm/Addons.js";
 import { OBJLoader } from "three/examples/jsm/Addons.js";
+import { DirectionalLightHelper } from "three";
+import { PointerLockControls } from "three/examples/jsm/controls/PointerLockControls";
 
-var scene, camera, renderer, mesh, loadingManager;
+var scene, camera, renderer, mesh, loadingManager, controls;
+var directionLight;
 var ambientLight, light;
 var meshFloor;
 var crate, crateTexture, crateNormalMap, crateBumpMap;
@@ -25,9 +28,33 @@ var loadingScreen = {
     )
 }
 
+var isJumping = false;
+var jumpVelocity = 0;
 
 var RESOURCES_LOADED = false;
-    
+
+// Models index
+var models = {
+    tree: {
+        obj: './assets/models/tree-pine-small.obj',
+        mtl: './assets/models/tree-pine-small.mtl',
+        mesh: null
+    },
+    rock: {
+        obj: './assets/models/rocks.obj',
+        mtl: './assets/models/rocks.mtl',
+        mesh: null
+    },
+    stones: {
+        obj: './assets/models/stones.obj',
+        mtl: './assets/models/stones.mtl',
+        mesh: null
+    }
+};
+
+// Meshes index
+var meshes = {};
+
 
 function init() {
     scene = new THREE.Scene();
@@ -46,8 +73,21 @@ function init() {
     loadingManager.onLoad = function() {
         console.log("loaded all resources");
         RESOURCES_LOADED = true;
+        onResourcesLoaded();
     }
 
+    // manipulate materials
+    // load the cube map
+    var path = '/assets/cube/sun/'
+    var format = '.jpg';
+    var urls = [
+        path + 'px' + format, path +'nx' + format,
+        path + 'py' + format, path +'ny' + format,
+        path + 'pz' + format, path +'nz' + format,
+    ];
+    var reflectionCube = new THREE.CubeTextureLoader().load(urls);
+    reflectionCube.format = THREE.RGBAFormat;
+    scene.background = reflectionCube;
 
     mesh = new THREE.Mesh(
         new THREE.BoxGeometry(1, 1, 1),
@@ -59,7 +99,7 @@ function init() {
     scene.add(mesh);
 
     meshFloor = new THREE.Mesh(
-        new THREE.PlaneGeometry(10, 10, 10, 10),
+        new THREE.PlaneGeometry(100, 100, 10, 10),
         new THREE.MeshPhongMaterial({ color: 0xffffff, wireframe: false })
     );
     meshFloor.rotation.x -= Math.PI / 2;
@@ -69,12 +109,20 @@ function init() {
     ambientLight = new THREE.AmbientLight(0xffffff, 0.2);
     scene.add(ambientLight);
 
-    light = new THREE.PointLight(0xffffff, 30, 18);
-    light.position.set(-3, 6, -3);
-    light.castShadow = true;
-    light.shadow.camera.near = 0.1;
-    light.shadow.camera.far = 25;
-    scene.add(light);
+    directionLight = getDirectionLight(0.5);
+    directionLight.position.set(-10, 20, -2);
+    directionLight.target.position.set(0, 0, 0);
+    directionLight.castShadow = true;
+    directionLight.shadow.camera.near = 0.1;
+    directionLight.shadow.camera.far = 25;
+    directionLight.shadow.camera.left = -50;
+    directionLight.shadow.camera.right = 50;
+    directionLight.shadow.camera.top = 50;
+    directionLight.shadow.camera.bottom = -50;
+    directionLight.shadow.mapSize.width = 5120;
+    directionLight.shadow.mapSize.height = 5120;
+    scene.add(directionLight);
+    
 
     var textureLoader = new THREE.TextureLoader(loadingManager);
     crateTexture = textureLoader.load('./assets/crate/crate0_diffuse.png');
@@ -95,28 +143,48 @@ function init() {
     scene.add(crate);
 
     
-    var mtlLoader = new MTLLoader(loadingManager);
-    mtlLoader.load('./assets/models/tree-pine-small.mtl', function(materials) {
-        materials.preload();
-        var objLoader = new OBJLoader(loadingManager);
-        objLoader.setMaterials(materials);
+    // var mtlLoader = new MTLLoader(loadingManager);
+    // mtlLoader.load('./assets/models/tree-pine-small.mtl', function(materials) {
+    //     materials.preload();
+    //     var objLoader = new OBJLoader(loadingManager);
+    //     objLoader.setMaterials(materials);
 
-        objLoader.load('./assets/models/tree-pine-small.obj', function(mesh) {
-            // OBJ được làm từ nhiều mesh nhỏ, dùng mesh.traverse(...) giúp ta có thể 
-            // đi qua từng component và thêm thuộc tính (propeties), ví dụ như shadow.
-            mesh.traverse(function(node) {
-                if (node instanceof THREE.Mesh) {
-                    node.castShadow = true;
-                    node.receiveShadow = true; // dùng reviesShadow để cho phép nhận bóng trên chính nó
-                }
-            }); 
+    //     objLoader.load('./assets/models/tree-pine-small.obj', function(mesh) {
+    //         // OBJ được làm từ nhiều mesh nhỏ, dùng mesh.traverse(...) giúp ta có thể 
+    //         // đi qua từng component và thêm thuộc tính (propeties), ví dụ như shadow.
+    //         mesh.traverse(function(node) {
+    //             if (node instanceof THREE.Mesh) {
+    //                 node.castShadow = true;
+    //                 node.receiveShadow = true; // dùng reviesShadow để cho phép nhận bóng trên chính nó
+    //             }
+    //         }); 
             
-            scene.add(mesh);
-            mesh.position.set(-3,0, 4);
-            mesh.scale.set(6, 6, 6);
-        });
-    });
+    //         scene.add(mesh);
+    //         mesh.position.set(-3,0, 4);
+    //         mesh.scale.set(6, 6, 6);
+    //     });
+    // });
 
+    for (var _key in models) {
+        (function(key) {
+            var mtlLoader = new MTLLoader(loadingManager);
+            mtlLoader.load(models[key].mtl, function(materials) {
+                materials.preload();
+                var objLoader = new OBJLoader(loadingManager);
+                objLoader.setMaterials(materials);
+                objLoader.load(models[key].obj, function(mesh) {
+                    mesh.traverse(function(node) {
+                        if (node instanceof THREE.Mesh) {
+                            node.castShadow = true;
+                            node.receiveShadow = true;
+                        }
+                    });
+
+                    models[key].mesh = mesh;
+                });
+            });
+        })(_key);
+    }
 
     camera.position.set(0, player.height, -5);
     camera.lookAt(new THREE.Vector3(0, player.height, 0));
@@ -128,6 +196,18 @@ function init() {
     renderer.shadowMap.type = THREE.BasicShadowMap;
 
     document.body.appendChild(renderer.domElement);
+
+
+    controls = new PointerLockControls(camera, renderer.domElement);
+    
+    document.addEventListener('click', function() {
+        controls.lock();
+    },false);
+
+
+    window.addEventListener("keydown", keyDown);
+    window.addEventListener("keyup", keyUp);
+
     animate();
 }
 
@@ -150,31 +230,39 @@ function animate() {
     mesh.rotation.y += 0.02;
 
     if (keyboard[87]) { // W key
-        camera.position.x -= Math.sin(camera.rotation.y) * player.speed;
-        camera.position.z -= -Math.cos(camera.rotation.y) * player.speed;
+        controls.moveForward(player.speed);
     }
     if (keyboard[83]) { // S key
-        camera.position.x += Math.sin(camera.rotation.y) * player.speed;
-        camera.position.z += -Math.cos(camera.rotation.y) * player.speed;
+        controls.moveForward(-player.speed);
     }
 
     if (keyboard[65]) { // A key
-        camera.position.x += Math.sin(camera.rotation.y + Math.PI / 2) * player.speed;
-        camera.position.z += -Math.cos(camera.rotation.y + Math.PI / 2) * player.speed;
+        controls.moveRight(-player.speed);
     }
 
     if (keyboard[68]) { // D key
-        camera.position.x += Math.sin(camera.rotation.y - Math.PI / 2) * player.speed;
-        camera.position.z += -Math.cos(camera.rotation.y - Math.PI / 2) * player.speed;
+        controls.moveRight(player.speed);
     }
 
-    if (keyboard[37]) { // left arrow key
-        camera.rotation.y -= player.turnSpeed;
+    if (keyboard[32] && !isJumping) { // Space key
+        isJumping = true;
+        jumpVelocity = 0.5; // Đặt vận tốc ban đầu khi nhảy
     }
 
-    if (keyboard[39]) { // right arrow key
-        camera.rotation.y += player.turnSpeed;
-    }   
+    if (isJumping) {
+        // cập nhật vị trí của nhân vật
+        controls.getObject().position.y += jumpVelocity;
+        // giảm vận tốc nhảy
+        jumpVelocity -= 0.01;
+
+        // Kiểm tra xem nhân vật đã chạm đất chưa
+        if (camera.position.y <= player.height) {
+            // Đặt vị trí của nhân vật về mặt đất
+            camera.position.y = player.height;
+            // Kết thúc quá trình nhảy
+            isJumping = false;
+        }
+    }
 
     renderer.render(scene, camera);
 }
@@ -187,7 +275,31 @@ function keyUp(event) {
     keyboard[event.keyCode] = false;
 }
 
-window.addEventListener("keydown", keyDown);
-window.addEventListener("keyup", keyUp);
+// Run when all resources are loaded
+function onResourcesLoaded() {
+    meshes["tree1"] = models.tree.mesh.clone();
+    meshes["tree2"] = models.tree.mesh.clone();
+    
+    meshes["tree1"].position.set(-5, 0, 4);
+    meshes["tree1"].scale.set(6, 6, 6);
+    meshes["tree2"].position.set(1, 0, 4);
+    meshes["tree2"].scale.set(6, 6, 6);
+    scene.add(meshes["tree1"]);
+    scene.add(meshes["tree2"]);
+    
+}  
+
+// Ánh sáng mặt trời
+function getDirectionLight(intensity) {
+    var light = new THREE.DirectionalLight(0xffffff, intensity);
+    light.castShadow = true; // Đổ bóng
+  
+    light.shadow.camera.left = -50; // giá trị mặc định là -5
+    light.shadow.camera.bottom = -50; // giá trị mặc định là -5
+    light.shadow.camera.Left = 50; // giá trị mặc định là 5
+    light.shadow.camera.top = 50; // giá trị mặc định là 5
+  
+    return light;
+}
 
 window.onload = init;
