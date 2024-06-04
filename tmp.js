@@ -75,6 +75,13 @@ var spheres = []; // Danh sách các hình cầu
 
 var crateId, intersects, boxId;
 
+// Khởi tạo bộ đếm thời gian
+
+var totalShot = 0, countHit = 0;
+var countdownTime = 60; // Countdown time in seconds
+var totalTarget = 0;
+var counterTargetHit, counterTotalShot, countdownTimer;
+
 const mousePosition = new THREE.Vector2();
 
 window.addEventListener('mousemove', (event) => {
@@ -259,6 +266,44 @@ function init() {
     crosshair.style.transform = 'translate(-50%, -50%)';
     document.body.appendChild(crosshair);
 
+    // Add CounterTargetHit
+    counterTargetHit = document.createElement('div');
+    counterTargetHit.style.position = 'absolute';
+    counterTargetHit.style.width = '200px';
+    counterTargetHit.style.height = '50px';
+    counterTargetHit.style.color = '#ffffff';
+    counterTargetHit.style.left = '10px';
+    counterTargetHit.style.top = '10px';
+    counterTargetHit.style.fontSize = '20px';
+    counterTargetHit.innerHTML = `Target killed: ${countHit}`;
+    document.body.appendChild(counterTargetHit);
+
+    // Add CounterTargetHit
+    counterTotalShot = document.createElement('div');
+    counterTotalShot.style.position = 'absolute';
+    counterTotalShot.style.width = '200px';
+    counterTotalShot.style.height = '50px';
+    counterTotalShot.style.color = '#ffffff';
+    counterTotalShot.style.left = '10px';
+    counterTotalShot.style.top = '40px';
+    counterTotalShot.style.fontSize = '20px';
+    counterTotalShot.innerHTML = `Total shot: ${totalShot}`;
+    document.body.appendChild(counterTotalShot);
+    
+    // Add Countdown Timer
+    countdownTimer = document.createElement('div');
+    countdownTimer.style.position = 'absolute';
+    countdownTimer.style.width = '200px';
+    countdownTimer.style.height = '50px';
+    countdownTimer.style.color = '#ffffff';
+    countdownTimer.style.left = '10px';
+    countdownTimer.style.top = '80px';
+    countdownTimer.style.fontSize = '20px';
+    countdownTimer.innerHTML = `Time: ${countdownTime}s`;
+    document.body.appendChild(countdownTimer);   
+    
+    startCountdown();
+
 
     controls = new PointerLockControls(camera, renderer.domElement);
     
@@ -284,6 +329,10 @@ function init() {
         // thay đổi kích thước.
         renderer.setSize(window.innerWidth, window.innerHeight);
     });
+
+    for (var i=0; i<4; i++) {
+        createSphere();
+    }
 
     animate();
 }
@@ -391,6 +440,7 @@ function animate() {
             bullets.push(bullet);
 
             scene.add(bullet);
+            totalShot++;
 
             // Play gunshot sound
             playGunshotSound();
@@ -441,6 +491,11 @@ function animate() {
     intersects = raycaster.intersectObjects(scene.children);
     console.log(intersects);
     // moveSphere();
+
+    // Update the counterTargetHit display
+    counterTargetHit.innerHTML = `Target killed: ${countHit}`;
+    counterTotalShot.innerHTML = `Total shot: ${totalShot}`;
+
     renderer.render(scene, camera);
 }
 
@@ -469,7 +524,7 @@ function createSphere() {
     spheres.push(sphere);
 }
 
-setInterval(createSphere, 4000);
+// setInterval(createSphere, 2000);
 
 // Di chuyên các Sphere theo hướng mong muốn
 function moveSphere() {
@@ -539,12 +594,34 @@ function checkCollision(bullet) {
         if (distance < 1) { // Kiểm tra va chạm
             // Xóa cả hình cầu và đạn khỏi cảnh
             scene.remove(sphere);
+            countHit++;
+            console.log(countHit)
             spheres.splice(i, 1);
             scene.remove(bullet);
+            createSphere();
             return true;
         }
     }
     return false;
+}
+
+function startCountdown() {
+    var countdownInterval = setInterval(function() {
+        countdownTime--;
+        countdownTimer.innerHTML = `Time: ${countdownTime}s`;
+
+        if (countdownTime <= 0) {
+            clearInterval(countdownInterval);
+            endGame();
+        }
+    }, 1000);
+}
+
+function endGame() {
+    // Add code to handle what happens when the game ends, e.g., stop the game, show a message, etc.
+    alert("Time's up! Game over.");
+    // Optionally, you can stop the animation loop by setting RESOURCES_LOADED to false
+    RESOURCES_LOADED = false;
 }
 
 // Ánh sáng mặt trời
