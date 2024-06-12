@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 import * as dat from "dat.gui";
 import { Wireframe } from "three/examples/jsm/Addons.js";
-import { any, cameraPosition } from "three/examples/jsm/nodes/Nodes.js";
+import { any, cameraPosition, int } from "three/examples/jsm/nodes/Nodes.js";
 import { createNoise2D } from "simplex-noise";
 import * as TWEEN from "@tweenjs/tween.js";
 import { MTLLoader } from "three/examples/jsm/Addons.js";
@@ -14,6 +14,8 @@ import { FBXLoader } from "three/examples/jsm/Addons.js";
 // Tạo màn hình overlay
 var overlay = document.createElement("div");
 overlay.style.position = "fixed";
+overlay.style.display = 'flex';
+overlay.style.flexDirection = 'column'
 overlay.style.top = "0";
 overlay.style.left = "0";
 overlay.style.width = "100%";
@@ -26,6 +28,37 @@ overlay.style.color = "white";
 overlay.style.fontSize = "4em";
 overlay.style.zIndex = "9999"; // Đảm bảo màn hình overlay hiển thị trên mọi thứ khác
 overlay.innerHTML = "Game Over";
+
+// Tạo container cho các nút
+var buttonContainer = document.createElement('div');
+// buttonContainer.style.display = 'flex';
+// buttonContainer.style.flexDirection = 'column'
+
+// Tạo nút Chơi lại
+var restartButton = document.createElement('button');
+restartButton.textContent = 'Play Again';
+restartButton.style.padding = '16px 24px';
+restartButton.style.fontSize = '16px';
+restartButton.style.fontFamily = 'Montserrat';
+restartButton.style.borderRadius = '10px';
+restartButton.style.fontWeight = 'bold';
+restartButton.style.color = '#ffffff';
+restartButton.style.backgroundColor = '#14b690';
+restartButton.style.marginLeft = '20px'; // Margin để tạo khoảng cách giữa các nút
+
+restartButton.addEventListener('click', restartGame)
+
+// Tạo nút Thoát
+// var exitButton = document.createElement('button');
+// exitButton.textContent = 'Thoát';
+
+// Thêm các nút vào container
+// buttonContainer.appendChild(exitButton);
+buttonContainer.appendChild(restartButton);
+
+// Thêm container vào màn hình overlay
+overlay.appendChild(buttonContainer);
+
 
 // Thêm màn hình overlay vào body của trang web
 document.body.appendChild(overlay);
@@ -105,11 +138,11 @@ var crateId, intersects, boxId;
 
 var totalShot = 0,
   countHit = 0;
-var countdownTime = 3; // Countdown time in seconds
 var totalTarget = 0;
 var counterTargetHit, counterTotalShot, countdownTimer, scoreBox, accuracyBox;
 var weaponName, weaponBox;
 var scoreContainer, accuracyContainer, weaponContainer;
+var horizontalBar, verticalBar;
 
 const mousePosition = new THREE.Vector2();
 
@@ -119,8 +152,10 @@ window.addEventListener("mousemove", (event) => {
 });
 
 const raycaster = new THREE.Raycaster();
+var countdownTime;
 
 function init() {
+    countdownTime = 3; // Countdown time in seconds
   scene = new THREE.Scene();
   camera = new THREE.PerspectiveCamera(
     90,
@@ -316,7 +351,7 @@ function init() {
   controls = new PointerLockControls(camera, renderer.domElement);
 
   document.addEventListener(
-    "click",
+    "click", 
     function () {
       if (endGameFlag==false) controls.lock();
     },
@@ -590,6 +625,8 @@ function endGame() {
   weaponContainer.removeChild(weaponName);
 
   document.body.removeChild(countdownTimer);
+  document.body.removeChild(verticalBar);
+  document.body.removeChild(horizontalBar);
 
   showGameOverScreen();
   document.removeEventListener('pointerdown',handlePointerDown)
@@ -653,17 +690,46 @@ function handlePointerDown(event) {
 
 function loadUI() {
   // Add crosshair
-  const crosshair = document.createElement("div");
-  crosshair.style.position = "absolute";
-  crosshair.style.width = "5px";
-  crosshair.style.height = "5px";
-  crosshair.style.color = "#ffffff";
-  crosshair.style.background = "red";
-  crosshair.style.borderRadius = "50%";
-  crosshair.style.left = "50%";
-  crosshair.style.top = "50%";
-  crosshair.style.transform = "translate(-50%, -50%)";
-  document.body.appendChild(crosshair);
+//   const crosshair = document.createElement("div");
+//   crosshair.style.position = "absolute";
+//   crosshair.style.width = "5px";
+//   crosshair.style.height = "5px";
+//   crosshair.style.color = "#ffffff";
+//   crosshair.style.background = "red";
+//   crosshair.style.borderRadius = "50%";
+//   crosshair.style.left = "50%";
+//   crosshair.style.top = "50%";
+//   crosshair.style.transform = "translate(-50%, -50%)";
+//   document.body.appendChild(crosshair);
+    const crosshair = document.createElement('div');
+    crosshair.style.position = 'absolute';
+
+    crosshair.style.width = '10px';
+    crosshair.style.height = '10px';
+    crosshair.style.left = '50%';
+    crosshair.style.top = '50%';
+    crosshair.style.transform = 'translate(-50%, -50%)';
+
+    horizontalBar = document.createElement('div');
+    horizontalBar.style.position = 'absolute';
+    horizontalBar.style.width = '14px'; // Chiều dài của thanh ngang
+    horizontalBar.style.height = '2px'; // Độ dày của thanh ngang
+    horizontalBar.style.backgroundColor = 'white';
+    horizontalBar.style.left = '50%';
+    horizontalBar.style.top = '50%';
+    horizontalBar.style.transform = 'translate(-50%, -50%)';
+
+    verticalBar = document.createElement('div');
+    verticalBar.style.position = 'absolute';
+    verticalBar.style.width = '2px'; // Độ dày của thanh dọc
+    verticalBar.style.height = '14px'; // Chiều dài của thanh dọc
+    verticalBar.style.backgroundColor = 'white';
+    verticalBar.style.left = '50%';
+    verticalBar.style.top = '50%';
+    verticalBar.style.transform = 'translate(-50%, -50%)';
+
+    document.body.appendChild(horizontalBar);
+    document.body.appendChild(verticalBar);
 
   // Add Score
   scoreContainer = document.getElementById("score-container");
@@ -800,6 +866,20 @@ function loadUI() {
 function showGameOverScreen() {
   overlay.style.display = "flex"; // Hiển thị màn hình overlay
   // Tắt sự kiện chơi tiếp ở đây
+}
+
+function restartGame() {
+  // Dọn dẹp tất cả các đối tượng trong scene
+  while(scene.children.length > 0){ 
+    scene.remove(scene.children[0]); 
+  }
+  
+  // Khởi tạo lại trò chơi
+//   init();
+  location.reload()
+
+  // Ẩn overlay
+  overlay.style.display = "none";
 }
 
 window.onload = init;
