@@ -12,20 +12,20 @@ import { PointerLockControls } from "three/examples/jsm/controls/PointerLockCont
 import { FBXLoader } from "three/examples/jsm/Addons.js";
 
 // Tạo màn hình overlay
-var overlay = document.createElement('div');
-overlay.style.position = 'fixed';
-overlay.style.top = '0';
-overlay.style.left = '0';
-overlay.style.width = '100%';
-overlay.style.height = '100%';
-overlay.style.backgroundColor = 'rgba(0, 0, 0, 0.5)'; // Màu đen với opacity 50%
-overlay.style.display = 'none'; // Mặc định ẩn đi
-overlay.style.justifyContent = 'center';
-overlay.style.alignItems = 'center';
-overlay.style.color = 'white';
-overlay.style.fontSize = '4em';
-overlay.style.zIndex = '9999'; // Đảm bảo màn hình overlay hiển thị trên mọi thứ khác
-overlay.innerHTML = 'Game Over';
+var overlay = document.createElement("div");
+overlay.style.position = "fixed";
+overlay.style.top = "0";
+overlay.style.left = "0";
+overlay.style.width = "100%";
+overlay.style.height = "100%";
+overlay.style.backgroundColor = "rgba(0, 0, 0, 0.5)"; // Màu đen với opacity 50%
+overlay.style.display = "none"; // Mặc định ẩn đi
+overlay.style.justifyContent = "center";
+overlay.style.alignItems = "center";
+overlay.style.color = "white";
+overlay.style.fontSize = "4em";
+overlay.style.zIndex = "9999"; // Đảm bảo màn hình overlay hiển thị trên mọi thứ khác
+overlay.innerHTML = "Game Over";
 
 // Thêm màn hình overlay vào body của trang web
 document.body.appendChild(overlay);
@@ -44,6 +44,7 @@ var player = {
   canShoot: 0,
 };
 var bullets = [];
+var endGameFlag = false;
 
 var loadingScreen = {
   scene: new THREE.Scene(),
@@ -104,7 +105,7 @@ var crateId, intersects, boxId;
 
 var totalShot = 0,
   countHit = 0;
-var countdownTime = 60; // Countdown time in seconds
+var countdownTime = 3; // Countdown time in seconds
 var totalTarget = 0;
 var counterTargetHit, counterTotalShot, countdownTimer, scoreBox, accuracyBox;
 var weaponName, weaponBox;
@@ -317,13 +318,11 @@ function init() {
   document.addEventListener(
     "click",
     function () {
-      controls.lock();
+      if (endGameFlag==false) controls.lock();
     },
     false
   );
 
-  window.addEventListener("keydown", keyDown);
-  window.addEventListener("keyup", keyUp);
 
   //   Canvas Responsive
   window.addEventListener("resize", function () {
@@ -342,6 +341,10 @@ function init() {
   for (var i = 0; i < 4; i++) {
     createSphere();
   }
+
+  document.addEventListener("pointerdown", handlePointerDown);
+  window.addEventListener("keydown", keyDown);
+  window.addEventListener("keyup", keyUp);
 
   animate();
 }
@@ -408,45 +411,6 @@ function animate() {
     jumpVelocity = 0.5; // Đặt vận tốc ban đầu khi nhảy
     playJumpSound();
   }
-
-  document.addEventListener("pointerdown", (event) => {
-    if (
-      event.pointerType === "mouse" &&
-      event.button === 0 &&
-      player.canShoot <= 0
-    ) {
-      player.canShoot = 10;
-      var bullet = new THREE.Mesh(
-        new THREE.SphereGeometry(0.03, 8, 8),
-        new THREE.MeshBasicMaterial({ color: 0xffffff })
-      );
-
-      var vector = new THREE.Vector3(-0.03, 0.035, -1);
-      vector.applyQuaternion(controls.getObject().quaternion);
-
-      bullet.position.set(
-        meshes["playerWeapon"].position.x + vector.x,
-        meshes["playerWeapon"].position.y + vector.y,
-        meshes["playerWeapon"].position.z + vector.z
-      );
-
-      bullet.velocity = vector;
-
-      bullet.alive = true;
-      setTimeout(function () {
-        bullet.alive = false;
-        scene.remove(bullet);
-      }, 1000);
-
-      bullets.push(bullet);
-
-      scene.add(bullet);
-      totalShot++;
-
-      // Play gunshot sound
-      playGunshotSound();
-    }
-  });
 
   if (isJumping) {
     // cập nhật vị trí của nhân vật
@@ -615,20 +579,24 @@ function endGame() {
   // Add code to handle what happens when the game ends, e.g., stop the game, show a message, etc.
   //   alert("Time's up! Game over.");
   // Optionally, you can stop the animation loop by setting RESOURCES_LOADED to false
-//   RESOURCES_LOADED = false;
-  scoreContainer.removeChild(scoreBox)
-  scoreContainer.removeChild(counterTargetHit)
+  //   RESOURCES_LOADED = false;
+  scoreContainer.removeChild(scoreBox);
+  scoreContainer.removeChild(counterTargetHit);
 
-  accuracyContainer.removeChild(accuracyBox)
-  accuracyContainer.removeChild(counterTotalShot)
+  accuracyContainer.removeChild(accuracyBox);
+  accuracyContainer.removeChild(counterTotalShot);
 
-  weaponContainer.removeChild(weaponBox)
-  weaponContainer.removeChild(weaponName)
+  weaponContainer.removeChild(weaponBox);
+  weaponContainer.removeChild(weaponName);
 
-  document.body.removeChild(countdownTimer)
-  
-  showGameOverScreen()
+  document.body.removeChild(countdownTimer);
 
+  showGameOverScreen();
+  document.removeEventListener('pointerdown',handlePointerDown)
+  window.removeEventListener("keydown", keyDown);
+  window.removeEventListener("keyup", keyUp);
+  endGameFlag=true;
+  controls.unlock();
 }
 
 // Ánh sáng mặt trời
@@ -642,6 +610,45 @@ function getDirectionLight(intensity) {
   light.shadow.camera.top = 50; // giá trị mặc định là 5
 
   return light;
+}
+
+function handlePointerDown(event) {
+    if (
+        event.pointerType === "mouse" &&
+        event.button === 0 &&
+        player.canShoot <= 0
+      ) {
+          player.canShoot = 10;
+          var bullet = new THREE.Mesh(
+              new THREE.SphereGeometry(0.03, 8, 8),
+              new THREE.MeshBasicMaterial({ color: 0xffffff })
+          );
+  
+          var vector = new THREE.Vector3(-0.03, 0.035, -1);
+          vector.applyQuaternion(controls.getObject().quaternion);
+  
+          bullet.position.set(
+              meshes["playerWeapon"].position.x + vector.x,
+              meshes["playerWeapon"].position.y + vector.y,
+              meshes["playerWeapon"].position.z + vector.z
+          );
+  
+          bullet.velocity = vector;
+  
+          bullet.alive = true;
+          setTimeout(function () {
+              bullet.alive = false;
+              scene.remove(bullet);
+          }, 1000);
+  
+          bullets.push(bullet);
+  
+          scene.add(bullet);
+          totalShot++;
+  
+          // Play gunshot sound
+          playGunshotSound();
+      }
 }
 
 function loadUI() {
@@ -791,8 +798,8 @@ function loadUI() {
 
 // Hàm để hiển thị màn hình overlay khi hết thời gian
 function showGameOverScreen() {
-    overlay.style.display = 'flex'; // Hiển thị màn hình overlay
-    // Tắt sự kiện chơi tiếp ở đây
+  overlay.style.display = "flex"; // Hiển thị màn hình overlay
+  // Tắt sự kiện chơi tiếp ở đây
 }
 
 window.onload = init;
