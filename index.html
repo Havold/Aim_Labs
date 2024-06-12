@@ -1,16 +1,27 @@
 <!DOCTYPE html>
 <html lang="en">
-	<head>
-		<meta charset="utf-8">
-		<title>My first three.js app</title>
-		<style>
-            html,
-			body { margin: 0; padding: 0; overflow: hidden;}
-		</style>
-	</head>
-	<body>
-		<div class="crosshair"></div>
-		<!-- <script type="module" src="/main.js"></script> -->
-		<script type="module" src="/tmp.js"></script>
-	</body>
+  <head>
+    <meta charset="utf-8" />
+    <title>Aim Labs</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+      }
+    </style>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="container">
+      <div id="score-container"></div>
+      <div id="accuracy-container"></div>
+	<div id="weapon-container"></div>
+    </div>
+
+    <!-- <script type="module" src="/main.js"></script> -->
+    <!-- <script type="module" src="/tmp.js"></script> -->
+    <script type="module" src="/map.js"></script>
+  </body>
 </html>

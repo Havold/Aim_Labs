@@ -40,8 +40,7 @@ var RESOURCES_LOADED = false;
 // Audio variables
 var listener, sound, audioLoader, footstepSound;
 
-// var footstepSounds = [];
-// var currentFootstepSound = 0, footstepInterval;
+
 
 // Models index
 var models = {
@@ -152,7 +151,7 @@ function init() {
     mesh.position.y += mesh.geometry.parameters.height / 2;
     mesh.castShadow = true;
     mesh.receiveShadow = true;
-    scene.add(mesh);
+    // scene.add(mesh);
     boxId = mesh.id;
 
     meshFloor = new THREE.Mesh(
@@ -198,30 +197,10 @@ function init() {
     );
     crate.position.set(2, 3 / 2, 2);
     crateId = crate.id;
-    scene.add(crate);
+    // scene.add(crate);
 
     
-    // var mtlLoader = new MTLLoader(loadingManager);
-    // mtlLoader.load('./assets/models/tree-pine-small.mtl', function(materials) {
-    //     materials.preload();
-    //     var objLoader = new OBJLoader(loadingManager);
-    //     objLoader.setMaterials(materials);
 
-    //     objLoader.load('./assets/models/tree-pine-small.obj', function(mesh) {
-    //         // OBJ được làm từ nhiều mesh nhỏ, dùng mesh.traverse(...) giúp ta có thể 
-    //         // đi qua từng component và thêm thuộc tính (propeties), ví dụ như shadow.
-    //         mesh.traverse(function(node) {
-    //             if (node instanceof THREE.Mesh) {
-    //                 node.castShadow = true;
-    //                 node.receiveShadow = true; // dùng reviesShadow để cho phép nhận bóng trên chính nó
-    //             }
-    //         }); 
-            
-    //         scene.add(mesh);
-    //         mesh.position.set(-3,0, 4);
-    //         mesh.scale.set(6, 6, 6);
-    //     });
-    // });
 
     for (var _key in models) {
         (function(key) {
@@ -529,6 +508,20 @@ function animate() {
         controls.getObject().rotation.y,
         controls.getObject().rotation.z 
     );
+
+    let isFacingBackward = false;
+
+    // ...
+    
+    // if (controls.getObject().rotation.y < 0) {
+    //   isFacingBackward = true;
+    // }
+    
+    // meshes["playerWeapon"].rotation.set(
+    //   controls.getObject().rotation.x,
+    //   controls.getObject().rotation.y * (isFacingBackward ? -1 : 1),
+    //   controls.getObject().rotation.z 
+    // );
     
     if (player.canShoot>0)
         player.canShoot -= 1;
@@ -603,8 +596,8 @@ function onResourcesLoaded() {
     meshes["playerWeapon"].scale.set(1,1 , 1);
 
 
-    scene.add(meshes["tree1"]);
-    scene.add(meshes["tree2"]);
+    // scene.add(meshes["tree1"]);
+    // scene.add(meshes["tree2"]);
     scene.add(meshes["playerWeapon"]);
     
 }  
