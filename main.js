@@ -83,7 +83,7 @@ var crate, crateTexture, crateNormalMap, crateBumpMap;
 
 var keyboard = {};
 var player = {
-  height: 3,
+  height: 4,
   speed: 0.2,
   turnSpeed: Math.PI * 0.02,
   canShoot: 0,
@@ -246,7 +246,7 @@ function init() {
 
   fbxLoader = new FBXLoader();
   fbxLoader.load("assets/models/Map/aim.fbx", (object) => {
-    object.scale.set(0.05, 0.05, 0.05);
+    object.scale.set(0.02, 0.02, 0.02);
     object.position.set(0, 0.1, 0);
 
     const texture_ground = textureLoader.load(
@@ -532,7 +532,7 @@ function createSphere() {
   // Đặt vị trí ngẫu nhiên cho Sphere
   sphere.position.set(
     Math.random() * 10 - 5,
-    Math.random() * 10,
+    Math.random() * 5,
     Math.random() * 10 - 5
   );
   if (sphere.position.y < 0.5) {
