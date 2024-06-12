@@ -9,6 +9,9 @@ import { MTLLoader } from "three/examples/jsm/Addons.js";
 import { OBJLoader } from "three/examples/jsm/Addons.js";
 import { DirectionalLightHelper } from "three";
 import { PointerLockControls } from "three/examples/jsm/controls/PointerLockControls";
+import { FBXLoader } from 'three/examples/jsm/Addons.js';
+
+
 
 var scene, camera, renderer, mesh, loadingManager, controls;
 var directionLight;
@@ -334,6 +337,59 @@ function init() {
         createSphere();
     }
 
+    const fbxLoader = new FBXLoader();
+fbxLoader.load('assets/models/Map/defuse_map.fbx', (object) => {
+    object.scale.set(0.05, 0.05, 0.05)
+    object.position.set(0, 0.1, 0)
+
+    const texture_ground = textureLoader.load('assets/img/wall.png', () => {
+        texture_ground.wrapS = THREE.RepeatWrapping;
+        texture_ground.wrapT = THREE.RepeatWrapping;
+        texture_ground.repeat.set(20, 25);
+    });
+    const texture_ground_2 = textureLoader.load('assets/img/wall.png', () => {
+        texture_ground_2.wrapS = THREE.RepeatWrapping;
+        texture_ground_2.wrapT = THREE.RepeatWrapping;
+        texture_ground_2.repeat.set(10, 1);
+    });
+    const texture_box = textureLoader.load('assets/img/sandy.jpg', () => {
+        texture_box.wrapS = THREE.RepeatWrapping;
+        texture_box.wrapT = THREE.RepeatWrapping;
+        texture_box.repeat.set(2, 2);
+    });
+
+    object.traverse(child => {
+        if (child.isMesh) {
+            console.log(child.name)
+            if (child.name == "Ground" || child.name == "Ground001" || child.name == "Ground002" ) {
+                child.material = new THREE.MeshPhongMaterial({ map: texture_ground, side: THREE.DoubleSide });
+                child.material.needsUpdate = true
+                child.castShadow = true
+                child.receiveShadow = true
+            }
+            else if (child.name == "Ground003" ) {
+                child.material = new THREE.MeshPhongMaterial({ map: texture_ground_2, side: THREE.DoubleSide });
+                child.material.needsUpdate = true
+                child.castShadow = true
+                child.receiveShadow = true
+            }
+            else if (child.name == "Box" || child.name == "Box001" || child.name == "Box002" || child.name == "Box003") {
+                child.material = new THREE.MeshPhongMaterial({ map: texture_box, side: THREE.DoubleSide });
+                child.material.needsUpdate = true
+                child.castShadow = true
+                child.receiveShadow = true
+            }
+            else
+            {
+                child.material = new THREE.MeshPhongMaterial({ color: '#4F6480', side: THREE.DoubleSide });
+                child.material.needsUpdate = true
+                child.castShadow = true
+                child.receiveShadow = true
+            }
+        }
+    });
+    scene.add(object)
+})
     animate();
 }
 
@@ -351,7 +407,6 @@ function animate() {
     }
 
     requestAnimationFrame(animate);
-
     mesh.rotation.x += 0.01;
     mesh.rotation.y += 0.02;
 
@@ -414,7 +469,7 @@ function animate() {
                 new THREE.MeshBasicMaterial({ color: 0xffffff })
             );
 
-            var vector = new THREE.Vector3(0,0,-1);
+            var vector = new THREE.Vector3(-0.03,0.035,-1);
             vector.applyQuaternion(controls.getObject().quaternion);
 
             bullet.position.set(
