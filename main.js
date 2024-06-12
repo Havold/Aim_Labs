@@ -2,225 +2,375 @@ import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 import * as dat from "dat.gui";
 import { Wireframe } from "three/examples/jsm/Addons.js";
-import { any, cameraPosition } from "three/examples/jsm/nodes/Nodes.js";
+import { any, cameraPosition, int } from "three/examples/jsm/nodes/Nodes.js";
 import { createNoise2D } from "simplex-noise";
 import * as TWEEN from "@tweenjs/tween.js";
-import concrete from './assets/img/concrete.jpg'
-import cement from './assets/img/cement.jpg'
-import sandy from './assets/img/sandy.jpg'
-import wall from './assets/img/wall.jpg'
-import checker from './assets/img/checker.jpg'
-import fingerprint from './assets/img/fingerprint.jpg'
+import { MTLLoader } from "three/examples/jsm/Addons.js";
+import { OBJLoader } from "three/examples/jsm/Addons.js";
+import { DirectionalLightHelper } from "three";
+import { PointerLockControls } from "three/examples/jsm/controls/PointerLockControls";
+import { FBXLoader } from "three/examples/jsm/Addons.js";
 
-// Khởi tạo scene và renderer
-function init() {
-  const renderer = new THREE.WebGLRenderer();
-  const gui = new dat.GUI();
-  const clock = new THREE.Clock();
+// Tạo màn hình overlay
+var overlay = document.createElement("div");
+overlay.style.position = "fixed";
+overlay.style.display = "flex";
+overlay.style.flexDirection = "column";
+overlay.style.top = "0";
+overlay.style.left = "0";
+overlay.style.width = "100%";
+overlay.style.height = "100%";
+overlay.style.backgroundColor = "rgba(0, 0, 0, 0.5)"; // Màu đen với opacity 50%
+overlay.style.display = "none"; // Mặc định ẩn đi
+overlay.style.justifyContent = "center";
+overlay.style.alignItems = "center";
+overlay.style.color = "white";
+overlay.style.fontSize = "4em";
+overlay.style.zIndex = "9999"; // Đảm bảo màn hình overlay hiển thị trên mọi thứ khác
+overlay.innerHTML = "Training Completed";
 
-  let step = 0;
+// Tạo container cho các nút
+var buttonContainer = document.createElement("div");
+// buttonContainer.style.display = 'flex';
+// buttonContainer.style.flexDirection = 'column'
 
-  renderer.setSize(window.innerWidth, window.innerHeight);
-  // renderer.setClearColor("rgb(120,120,120)");
-  renderer.shadowMap.enabled = true;
-  document.body.appendChild(renderer.domElement);
+var statsContainer = document.createElement("div");
 
-  const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(
-    45,
+var scoreDiv = document.createElement("div");
+// scoreDiv.textContent = "Score:";
+scoreDiv.style.fontSize = "16px";
+scoreDiv.style.fontFamily = "Montserrat";
+scoreDiv.style.fontWeight = "bold";
+scoreDiv.style.color = "#ffffff";
+scoreDiv.style.marginTop = "16px";
+
+var accuracyDiv = document.createElement("div");
+// accuracyDiv.textContent = "Accuracy";
+accuracyDiv.style.fontSize = "16px";
+accuracyDiv.style.fontFamily = "Montserrat";
+accuracyDiv.style.fontWeight = "bold";
+accuracyDiv.style.color = "#ffffff";
+
+// Tạo nút Chơi lại
+var restartButton = document.createElement("button");
+restartButton.textContent = "Train Again";
+restartButton.style.padding = "16px 24px";
+restartButton.style.fontSize = "16px";
+restartButton.style.fontFamily = "Montserrat";
+restartButton.style.borderRadius = "10px";
+restartButton.style.fontWeight = "bold";
+restartButton.style.color = "#ffffff";
+restartButton.style.backgroundColor = "#14b690";
+restartButton.style.marginLeft = "20px"; // Margin để tạo khoảng cách giữa các nút
+restartButton.addEventListener("click", restartGame);
+
+// Thêm các nút vào container
+buttonContainer.appendChild(restartButton);
+
+// Thêm container vào màn hình overlay
+overlay.appendChild(scoreDiv);
+overlay.appendChild(accuracyDiv);
+overlay.appendChild(buttonContainer);
+
+// Thêm màn hình overlay vào body của trang web
+document.body.appendChild(overlay);
+
+var scene, camera, renderer, mesh, loadingManager, controls;
+var directionLight;
+var ambientLight, light;
+var meshFloor;
+var crate, crateTexture, crateNormalMap, crateBumpMap;
+
+var keyboard = {};
+var player = {
+  height: 3,
+  speed: 0.2,
+  turnSpeed: Math.PI * 0.02,
+  canShoot: 0,
+};
+var bullets = [];
+var endGameFlag = false;
+
+var loadingScreen = {
+  scene: new THREE.Scene(),
+  camera: new THREE.PerspectiveCamera(
+    90,
     window.innerWidth / window.innerHeight,
-    1,
+    0.1,
+    100
+  ),
+  box: new THREE.Mesh(
+    new THREE.BoxGeometry(0.5, 0.5, 0.5),
+    new THREE.MeshBasicMaterial({ color: 0x4444ff })
+  ),
+};
+
+var isJumping = false;
+var jumpVelocity = 0;
+
+var RESOURCES_LOADED = false;
+
+// Audio variables
+var listener, sound, audioLoader, footstepSound;
+
+var fbxLoader;
+// var footstepSounds = [];
+// var currentFootstepSound = 0, footstepInterval;
+
+// Models index
+var models = {
+  rock: {
+    obj: "./assets/models/rocks.obj",
+    mtl: "./assets/models/rocks.mtl",
+    mesh: null,
+  },
+  stones: {
+    obj: "./assets/models/stones.obj",
+    mtl: "./assets/models/stones.mtl",
+    mesh: null,
+  },
+  blasterA: {
+    obj: "./assets/models/Blaster/blasterA.obj",
+    mtl: "./assets/models/Blaster/blasterA.mtl",
+    mesh: null,
+  },
+  blasterB: {
+    obj: "./assets/models/Blaster/blasterB.obj",
+    mtl: "./assets/models/Blaster/blasterB.mtl",
+    mesh: null,
+  },
+};
+
+// Meshes index
+var meshes = {};
+var spheres = []; // Danh sách các hình cầu
+
+var crateId, intersects, boxId;
+
+// Khởi tạo bộ đếm thời gian
+
+var totalShot = 0,
+  countHit = 0;
+var totalTarget = 0,
+  accuracy;
+var counterTargetHit, counterTotalShot, countdownTimer, scoreBox, accuracyBox;
+var weaponName, weaponBox;
+var scoreContainer, accuracyContainer, weaponContainer;
+var horizontalBar, verticalBar;
+
+const mousePosition = new THREE.Vector2();
+
+window.addEventListener("mousemove", (event) => {
+  mousePosition.x = (event.clientX / window.innerWidth) * 2 - 1;
+  mousePosition.y = -(event.clientY / window.innerHeight) * 2 + 1;
+});
+
+const raycaster = new THREE.Raycaster();
+var countdownTime;
+
+function init() {
+  countdownTime = 15; // Countdown time in seconds
+  scene = new THREE.Scene();
+  camera = new THREE.PerspectiveCamera(
+    90,
+    window.innerWidth / window.innerHeight,
+    0.1,
     1000
   );
 
-  const cameraLookAt = {
-    x: 0,
-    y: 2,
-    z: 0,
+  // Audio listener
+  listener = new THREE.AudioListener();
+  camera.add(listener);
+
+  // Audio loader
+  audioLoader = new THREE.AudioLoader();
+
+  // Load footstep sound
+  footstepSound = new THREE.Audio(listener);
+  audioLoader.load("./assets/sounds/footstep.mp3", function (buffer) {
+    footstepSound.setBuffer(buffer);
+    footstepSound.setLoop(false); // Set to loop
+    footstepSound.setVolume(0); // Start with volume 0
+    footstepSound.play(); // Start playing immediately but with 0 volume
+  });
+
+  loadingScreen.box.position.set(0, 0, 5);
+  loadingScreen.camera.lookAt(loadingScreen.box.position);
+  loadingScreen.scene.add(loadingScreen.box);
+
+  loadingManager = new THREE.LoadingManager();
+
+  loadingManager.onProgress = function (item, loaded, total) {
+    console.log(item, loaded, total);
   };
 
-  camera.lookAt(new THREE.Vector3(cameraLookAt.x, cameraLookAt.y, cameraLookAt.z));
+  loadingManager.onLoad = function () {
+    console.log("loaded all resources");
+    RESOURCES_LOADED = true;
+    onResourcesLoaded();
+  };
 
-  const orbit = new OrbitControls(camera, renderer.domElement);
-
-  // Đối tượng hỗ trợ hiển thị hệ tọa độ
-  const axesHelper = new THREE.AxesHelper(3);
-  scene.add(axesHelper);
-
-  // Đối tượng hỗ trợ hiển thị lưới
-  const gridHelper = new THREE.GridHelper(10);
-  // scene.add(gridHelper);
-
-  camera.position.set(16, 4, 30);
-  camera.rotation.y=0.5
-  // orbit.update();
-
-  // Tạo các hình hộp, mặt phẳng, hình cầu
-  //   var box = getBox(4, 4, 4);
-  var sphereMaterial = getMaterial("standard", "rgb(255,255,255)");
-  var planeMaterial = getplaneMaterial('standard', 'rgb(255,255,255)')
-  var sphere = getSphere(sphereMaterial, 5);
-  var plane = getPlane(planeMaterial,1000);
-  var lightRight = getSpotLight(20, 'rgb(255,220,180)');
-  var lightLeft = getSpotLight(20, 'rgb(255,220,180)');
-  var groupBox = getGroupBox(20, 2.5);
-  groupBox.name = "groupBox";
-
-  lightLeft.position.x = -4;
-  lightLeft.position.y = 2;
-  lightLeft.position.z = -4;
-  lightLeft.intensity = 0.8
-
-  lightRight.position.x = 4;
-  lightRight.position.y = 2;
-  lightRight.position.z = -4;
-  lightRight.intensity = 0.8
-
-  sphereMaterial.roughness = 0.2
-  sphereMaterial.metalness = 0.2
-  planeMaterial.roughness = 0.4
-  planeMaterial.metalness = 0.2
-  
   // manipulate materials
   // load the cube map
-  var path = '/assets/cube/sun/'
-  var format = '.jpg';
+  var path = "/assets/cube/sun/";
+  var format = ".jpg";
   var urls = [
-    path + 'px' + format, path +'nx' + format,
-    path + 'py' + format, path +'ny' + format,
-    path + 'pz' + format, path +'nz' + format,
+    path + "px" + format,
+    path + "nx" + format,
+    path + "py" + format,
+    path + "ny" + format,
+    path + "pz" + format,
+    path + "nz" + format,
   ];
   var reflectionCube = new THREE.CubeTextureLoader().load(urls);
   reflectionCube.format = THREE.RGBAFormat;
+  scene.background = reflectionCube;
 
-  var loader = new THREE.TextureLoader();
-  planeMaterial.map = loader.load(checker)
-  planeMaterial.bumpMap = loader.load(checker)
-  planeMaterial.roughnessMap = loader.load(checker)
-  planeMaterial.bumpScale = 0.01
-  planeMaterial.metalness = 0.1;
-  planeMaterial.roughness = 0.7;
-  planeMaterial.envMap = reflectionCube;
-  sphereMaterial.roughnessMap = loader.load(fingerprint)
-  sphereMaterial.envMap = reflectionCube;
-  scene.background = reflectionCube
+  mesh = new THREE.Mesh(
+    new THREE.BoxGeometry(0.001, 1.001, 0.0011),
+    new THREE.MeshPhongMaterial({ color: 0xff4444, wireframe: false })
+  );
+  mesh.position.y += mesh.geometry.parameters.height / 2;
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  scene.add(mesh);
+  boxId = mesh.id;
 
-  var maps = ['map', 'bumpMap', 'roughnessMap']
-  
-  maps.forEach((mapName) => {
-    var texture = planeMaterial[mapName];
-    texture.wrapS = THREE.RepeatWrapping;
-    texture.wrapT = THREE.RepeatWrapping;
-    texture.repeat.set(10,10);
-  })
+  meshFloor = new THREE.Mesh(
+    new THREE.PlaneGeometry(100, 100, 10, 10),
+    new THREE.MeshPhongMaterial({ color: 0xffffff, wireframe: false })
+  );
+  meshFloor.rotation.x -= Math.PI / 2;
+  meshFloor.receiveShadow = true;
+  scene.add(meshFloor);
 
-  
+  fbxLoader = new FBXLoader();
+  fbxLoader.load("assets/models/Map/aim.fbx", (object) => {
+    object.scale.set(0.05, 0.05, 0.05);
+    object.position.set(0, 0.1, 0);
 
-  // var texture = planeMaterial.map;
-  // texture.wrapS = THREE.RepeatWrapping;
-  // texture.wrapT = THREE.RepeatWrapping;
-  // texture.repeat.set(1.5,1.5);
+    const texture_ground = textureLoader.load(
+      "assets/img/aim_lab_gr.png",
+      () => {
+        texture_ground.wrapS = THREE.RepeatWrapping;
+        texture_ground.wrapT = THREE.RepeatWrapping;
+        texture_ground.repeat.set(20, 25);
+      }
+    );
+    const texture_ground_2 = textureLoader.load(
+      "assets/img/aim_lab_gr.png",
+      () => {
+        texture_ground_2.wrapS = THREE.RepeatWrapping;
+        texture_ground_2.wrapT = THREE.RepeatWrapping;
+        texture_ground_2.repeat.set(10, 1);
+      }
+    );
+    const texture_box = textureLoader.load("assets/img/wood.jpg", () => {
+      texture_box.wrapS = THREE.RepeatWrapping;
+      texture_box.wrapT = THREE.RepeatWrapping;
+      texture_box.repeat.set(2, 2);
+    });
 
+    object.traverse((child) => {
+      if (child.isMesh) {
+        if (child.name == "san") {
+          child.material = new THREE.MeshPhongMaterial({
+            map: texture_ground,
+            side: THREE.DoubleSide,
+          });
+          child.material.needsUpdate = true;
+          child.receiveShadow = true;
+        } else if (child.name == "noc") {
+          child.material = new THREE.MeshPhongMaterial({
+            map: texture_ground_2,
+            side: THREE.DoubleSide,
+          });
+          child.material.needsUpdate = true;
+          child.castShadow = true;
+        } else if (child.name == "wall") {
+          child.material = new THREE.MeshPhongMaterial({
+            map: texture_box,
+            side: THREE.DoubleSide,
+          });
+          child.material.needsUpdate = true;
+          child.receiveShadow = true;
+        } else {
+          child.material = new THREE.MeshPhongMaterial({
+            color: "#4F6480",
+            side: THREE.DoubleSide,
+          });
+          child.material.needsUpdate = true;
+          child.castShadow = true;
+          child.receiveShadow = true;
+        }
+      }
+    });
+    object.rotation.set(0, Math.PI / 2, 0);
+    scene.add(object);
+  });
 
-  // Cài đặt các tuỳ chọn cho hình cầu
-  const options = {
-    sphereColor: "#ffffff",
-    wireframe: false,
-    speed: 0.1,
-    scale: 4,
-    animateEnable: false,
-    sphereAnimated: false,
-    cameraAnimated: false,
-  };
+  ambientLight = new THREE.AmbientLight(0xffffff, 0.2);
+  scene.add(ambientLight);
 
-  // Hiển thị wireframe của hình cầu thông qua GUI
-  //   gui.add(options, "wireframe").onChange(function (e) {
-  //     box.material.wireframe = e;
-  //   });
+  directionLight = getDirectionLight(0.5);
+  directionLight.position.set(-10, 20, -2);
+  directionLight.target.position.set(0, 0, 0);
+  directionLight.castShadow = true;
+  directionLight.shadow.camera.near = 0.1;
+  directionLight.shadow.camera.far = 25;
+  directionLight.shadow.camera.left = -50;
+  directionLight.shadow.camera.right = 50;
+  directionLight.shadow.camera.top = 50;
+  directionLight.shadow.camera.bottom = -50;
+  directionLight.shadow.mapSize.width = 5120;
+  directionLight.shadow.mapSize.height = 5120;
+  scene.add(directionLight);
 
-  // GUI Sphere
-  const lightFolder = gui.addFolder("Light");
-  lightFolder.open();
-  const lightLeftFolder = lightFolder.addFolder('Light Left')
-  lightLeftFolder.add(lightLeft, "intensity", 0, 10).name("Intensity");
-  //   lightFolder.add(directionLight, "penumbra", 0, 1).name("Penumbra");
-  // POSITION
-  const lightLeftPositionFolder = lightLeftFolder.addFolder("Position");
-  lightLeftPositionFolder
-    .add(lightLeft.position, "x", -20, 20)
-    .name("Position X");
-    lightLeftPositionFolder
-    .add(lightLeft.position, "y", -20, 20)
-    .name("Position Y");
-    lightLeftPositionFolder
-    .add(lightLeft.position, "z", -20, 20)
-    .name("Position Z");
+  var textureLoader = new THREE.TextureLoader(loadingManager);
 
-    const lightRightFolder = lightFolder.addFolder('Light Right')
-    lightRightFolder.add(lightRight, "intensity", 0, 100).name("Intensity");
-    //   lightFolder.add(directionLight, "penumbra", 0, 1).name("Penumbra");
-    // POSITION
-    const lightRightPositionFolder = lightRightFolder.addFolder("Position");
-    lightRightPositionFolder
-      .add(lightRight.position, "x", -20, 20)
-      .name("Position X");
-      lightRightPositionFolder
-      .add(lightRight.position, "y", -20, 20)
-      .name("Position Y");
-      lightRightPositionFolder
-      .add(lightRight.position, "z", -20, 20)
-      .name("Position Z");
+  for (var _key in models) {
+    (function (key) {
+      var mtlLoader = new MTLLoader(loadingManager);
+      mtlLoader.load(models[key].mtl, function (materials) {
+        materials.preload();
+        var objLoader = new OBJLoader(loadingManager);
+        objLoader.setMaterials(materials);
+        objLoader.load(models[key].obj, function (mesh) {
+          mesh.traverse(function (node) {
+            if (node instanceof THREE.Mesh) {
+              node.castShadow = true;
+              node.receiveShadow = true;
+            }
+          });
 
-    const materialFolder = gui.addFolder("Materials");
-    materialFolder.open();
-    const sphereMaterialFolder = materialFolder.addFolder('Sphere Material')
-    sphereMaterialFolder.add(sphereMaterial, 'roughness', 0, 1)
-    sphereMaterialFolder.add(sphereMaterial, 'metalness', 0, 1)
-
-    const planeMaterialFolder = materialFolder.addFolder('Plane Material')
-    planeMaterialFolder.add(planeMaterial, 'roughness', 0, 1)
-    planeMaterialFolder.add(planeMaterial, 'metalness', 0, 1)
-  // // SHININESS DÀNH CHO PhongMaterial
-  // const materialFolder = gui.addFolder("Materials");
-  // materialFolder.open();
-  // materialFolder.add(sphereMaterial, 'shininess', 0, 1000)
-
-
-
-  // Thiết lập vị trí và góc quay của các đối tượng
-  //   box.position.y = box.geometry.parameters.height / 2;
-  sphere.position.y = sphere.geometry.parameters.radius;
-  // sphere.position.y = 4;
-  plane.rotation.x = Math.PI / 2;
-  plane.name = "plane-1";
-
-
-  // Thêm các đối tượng vào scene
-  //   scene.add(box);
-  scene.add(sphere);
-  scene.add(plane);
-  scene.add(lightLeft);
-  scene.add(lightRight);
-  // scene.add(groupBox);
-  //   scene.add(helper);
-  // directionLight.add(sphere);
-
-  // Bắt đầu vòng lặp render
-  renderer.setAnimationLoop(animate);
-  update(renderer, scene, camera, orbit, clock);
-
-  function animate(time) {
-    
-
-    // Di chuyển hình cầu theo hàm sin
-    step += options.speed;
-    if (options.animateEnable) {
-      sphere.position.y =
-        4 * Math.abs(Math.sin(step)) + sphere.geometry.parameters.radius;
-    }
-
-    renderer.render(scene, camera);
+          models[key].mesh = mesh;
+        });
+      });
+    })(_key);
   }
+
+  camera.position.set(0, player.height, -10);
+  camera.lookAt(new THREE.Vector3(0, player.height, 0));
+
+  renderer = new THREE.WebGLRenderer();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.BasicShadowMap;
+
+  document.body.appendChild(renderer.domElement);
+
+  loadUI();
+
+  controls = new PointerLockControls(camera, renderer.domElement);
+
+  document.addEventListener(
+    "click",
+    function () {
+      if (endGameFlag == false) controls.lock();
+    },
+    false
+  );
 
   //   Canvas Responsive
   window.addEventListener("resize", function () {
@@ -235,95 +385,289 @@ function init() {
     // thay đổi kích thước.
     renderer.setSize(window.innerWidth, window.innerHeight);
   });
-  return scene;
+
+  for (var i = 0; i < 4; i++) {
+    createSphere();
+  }
+
+  document.addEventListener("pointerdown", handlePointerDown);
+  window.addEventListener("keydown", keyDown);
+  window.addEventListener("keyup", keyUp);
+
+  animate();
 }
 
-// Cập nhật scene
-function update(renderer, scene, camera, orbit, clock) {
-  renderer.render(scene, camera);
+function animate() {
+  if (RESOURCES_LOADED == false) {
+    requestAnimationFrame(animate);
+    loadingScreen.box.position.x -= 0.05;
 
-  requestAnimationFrame(function () {
-    update(renderer, scene, camera, orbit, clock);
-  });
-}
+    if (loadingScreen.box.position.x < -10) {
+      loadingScreen.box.position.x = 10;
+    }
+    loadingScreen.box.position.y = Math.sin(loadingScreen.box.position.x);
 
-// Tạo hình hộp
-function getBox(w, h, d) {
-  var geometry = new THREE.BoxGeometry(w, h, d);
-  var material = new THREE.MeshPhongMaterial({
-    color: "rgb(120,120,120)",
-  });
-  var mesh = new THREE.Mesh(geometry, material);
-  mesh.castShadow = true;
-  return mesh;
-}
+    renderer.render(loadingScreen.scene, loadingScreen.camera);
+    return;
+  }
 
-// Tạo 1 nhóm nhiều hình hộp
-function getGroupBox(amount, separationMultiplier) {
-  var group = new THREE.Group();
+  requestAnimationFrame(animate);
 
-  for (var i = 0; i < amount; i++) {
-    var obj = getBox(1, 2, 1);
-    obj.position.x = i * separationMultiplier;
-    obj.position.y = obj.geometry.parameters.height / 2;
-    group.add(obj);
-    for (var j = 0; j < amount; j++) {
-      var obj = getBox(1, 2, 1);
-      obj.position.x = i * separationMultiplier;
-      obj.position.y = obj.geometry.parameters.height / 2;
-      obj.position.z = j * separationMultiplier;
-      group.add(obj);
+  mesh.rotation.x += 0.01;
+  mesh.rotation.y += 0.02;
+
+  for (var index = 0; index < bullets.length; index += 1) {
+    if (bullets[index] === undefined) continue;
+    if (bullets[index].alive == false) {
+      bullets.splice(index, 1);
+      continue;
+    }
+
+    bullets[index].position.add(bullets[index].velocity);
+  }
+
+  let isMoving = keyboard[87] || keyboard[65] || keyboard[83] || keyboard[68]; // W, A, S, D keys
+
+  if (isMoving) {
+    if (footstepSound) footstepSound.setVolume(0.5);
+  } else {
+    if (footstepSound) footstepSound.setVolume(0);
+  }
+
+  if (keyboard[87]) {
+    // W key
+    controls.moveForward(player.speed);
+  }
+  if (keyboard[83]) {
+    // S key
+    controls.moveForward(-player.speed);
+  }
+
+  if (keyboard[65]) {
+    // A key
+    controls.moveRight(-player.speed);
+  }
+
+  if (keyboard[68]) {
+    // D key
+    controls.moveRight(player.speed);
+  }
+
+  if (keyboard[32] && !isJumping) {
+    // Space key
+    isJumping = true;
+    jumpVelocity = 0.5; // Đặt vận tốc ban đầu khi nhảy
+    playJumpSound();
+  }
+
+  if (isJumping) {
+    // cập nhật vị trí của nhân vật
+    controls.getObject().position.y += jumpVelocity;
+    // giảm vận tốc nhảy
+    jumpVelocity -= 0.01;
+
+    // Kiểm tra xem nhân vật đã chạm đất chưa
+    if (camera.position.y <= player.height) {
+      // Đặt vị trí của nhân vật về mặt đất
+      camera.position.y = player.height;
+      // Kết thúc quá trình nhảy
+      isJumping = false;
     }
   }
 
-  group.position.x = -(separationMultiplier * (amount - 1)) / 2;
-  group.position.z = -(separationMultiplier * (amount - 1)) / 2;
+  meshes["playerWeapon"].position.set(
+    controls.getObject().position.x -
+      Math.sin(controls.getObject().rotation.y + Math.PI / 6) * 0.75 -
+      0.2,
+    controls.getObject().position.y - 1.0,
+    controls.getObject().position.z +
+      Math.cos(controls.getObject().rotation.y + Math.PI / 6) * 0.75 +
+      0.1
+  );
 
-  return group;
+  meshes["playerWeapon"].rotation.set(
+    controls.getObject().rotation.x,
+    controls.getObject().rotation.y + Math.PI / 2,
+    controls.getObject().rotation.z - Math.PI / 2
+  );
+
+  if (player.canShoot > 0) player.canShoot -= 1;
+
+  // Kiểm tra va chạm giữa đạn và hình cầu
+  for (let i = 0; i < bullets.length; i++) {
+    if (bullets[i].alive == false) continue;
+    if (checkCollision(bullets[i])) {
+      scene.remove(bullets[i]);
+      bullets[i].alive = false;
+    }
+  }
+
+  raycaster.setFromCamera(mousePosition, camera);
+  intersects = raycaster.intersectObjects(scene.children);
+  console.log(intersects);
+  moveSphere();
+
+  // Update the accuracy display
+  scoreBox.innerHTML = `${countHit}`;
+  accuracy = ((countHit / totalShot) * 100).toFixed(2);
+  accuracyBox.innerHTML = `${accuracy}%`;
+
+  renderer.render(scene, camera);
 }
 
-// Tạo mặt phẳng
-function getPlane(material,size) {
-  var geometry = new THREE.PlaneGeometry(size, size);
-  var mesh = new THREE.Mesh(geometry, material);
-  mesh.receiveShadow = true;
-  return mesh;
+function keyDown(event) {
+  keyboard[event.keyCode] = true;
 }
 
-// Tạo hình cầu
-function getSphere(material, radius, wSegments = 24, hSegments = 24) {
-  var geometry = new THREE.SphereGeometry(radius, wSegments, hSegments);
-  // var material = new THREE.MeshBasicMaterial({
-  //   color: 0xffffff,
-  // });
-  var mesh = new THREE.Mesh(geometry, material);
-  mesh.castShadow = true
-  return mesh;
+function keyUp(event) {
+  keyboard[event.keyCode] = false;
 }
 
-// Tạo điểm sáng
-function getPointLight(intensity) {
-  var light = new THREE.directionLight(0xffffff, intensity);
-  light.castShadow = true; // Đổ bóng
-  return light;
+// Hàm tạo và đặt Sphere ở vị trí ngẫu nhiên
+function createSphere() {
+  var sphereGeometry = new THREE.SphereGeometry(0.5, 32, 32);
+  var sphereMaterial = new THREE.MeshPhongMaterial({ color: 0xff0000 });
+  var sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
+
+  // Đặt vị trí ngẫu nhiên cho Sphere
+  sphere.position.set(
+    Math.random() * 10 - 5,
+    Math.random() * 10,
+    Math.random() * 10 - 5
+  );
+  if (sphere.position.y < 0.5) {
+    sphere.position.y += 0.5;
+  }
+  if (sphere.position.z < -4) {
+    sphere.position.z += 4;
+  }
+
+  scene.add(sphere);
+  spheres.push(sphere);
 }
 
-// Nguồn sáng này sẽ giống Spotlight trên sân khấu
-function getSpotLight(intensity, color) {
-  color = color === undefined ? "rgb(255,255,255)" : color;
-  var light = new THREE.DirectionalLight(color, intensity);
-  light.castShadow = true; // Đổ bóng
-  light.shadow.bias = 0.01; // Làm cho phần viền, phần tiếp xúc giữa box và plane mịn hơn
-  light.penumbra = 0.5;
-  // Tăng resolution của shadow, giúp nhìn sharp hơn, giá trị default là 512, lưu ý đừng tăng nhiều quá
-  light.shadow.mapSize.width = 1024;
-  // Tăng resolution của shadow, giúp nhìn sharp hơn, giá trị default là 512, lưu ý đừng tăng nhiều quá
-  light.shadow.mapSize.height = 1024;
+// Định nghĩa biến trạng thái cho việc di chuyển
+var moveDirection = "right"; // Khởi tạo hướng di chuyển là sang phải
+var moveDistance = 2; // Khoảng cách di chuyển trái hoặc phải
+var moveSpeed = 0.01; // Tốc độ di chuyển, có thể điều chỉnh
 
-  return light;
+function moveSphere() {
+  for (var i = 0; i < spheres.length; i++) {
+    // Di chuyển theo hướng và tốc độ đã định nghĩa
+    if (moveDirection === "right") {
+      spheres[i].position.x += moveSpeed;
+    } else {
+      spheres[i].position.x -= moveSpeed;
+    }
+
+    // Kiểm tra xem có đạt đến điểm cuối của khoảng cách di chuyển hay không
+    if (moveDirection === "right" && spheres[i].position.x >= moveDistance) {
+      moveDirection = "left"; // Đổi hướng di chuyển
+    } else if (
+      moveDirection === "left" &&
+      spheres[i].position.x <= -moveDistance
+    ) {
+      moveDirection = "right"; // Đổi hướng di chuyển
+    }
+  }
 }
 
-// Nguồn sáng này sẽ giống với hướng chiếu sáng của mặt trời khi ở Trải Đất
+// Run when all resources are loaded
+function onResourcesLoaded() {
+  fbxLoader.load("./assets/models/Gun/glock.fbx", (object) => {
+    meshes["playerWeapon"] = object;
+    meshes["playerWeapon"].position.set(9, 0, 3);
+    meshes["playerWeapon"].scale.set(5, 5, 5);
+    scene.add(object);
+  });
+}
+
+// Play gunshot sound
+function playGunshotSound() {
+  sound = new THREE.Audio(listener);
+  audioLoader.load("./assets/sounds/Glock.mp3", function (buffer) {
+    sound.setBuffer(buffer);
+    sound.setVolume(0.3);
+    sound.play();
+  });
+
+  for (let i = 0; i < intersects.length; i++) {
+    if (
+      intersects[i].object.id == crateId ||
+      intersects[i].object.id == boxId
+    ) {
+      scene.remove(intersects[i].object);
+    }
+  }
+
+  console.log(spheres);
+}
+
+function playJumpSound() {
+  sound = new THREE.Audio(listener);
+  audioLoader.load("./assets/sounds/jump.mp3", function (buffer) {
+    sound.setBuffer(buffer);
+    sound.setVolume(0.5);
+    sound.play();
+  });
+}
+
+function checkCollision(bullet) {
+  for (let i = 0; i < spheres.length; i++) {
+    const sphere = spheres[i];
+    const distance = bullet.position.distanceTo(sphere.position);
+    if (distance < 1) {
+      // Kiểm tra va chạm
+      // Xóa cả hình cầu và đạn khỏi cảnh
+      scene.remove(sphere);
+      countHit++;
+      console.log(countHit);
+      spheres.splice(i, 1);
+      scene.remove(bullet);
+      createSphere();
+      return true;
+    }
+  }
+  return false;
+}
+
+function startCountdown() {
+  var countdownInterval = setInterval(function () {
+    countdownTime--;
+    countdownTimer.innerHTML = countdownTime;
+
+    if (countdownTime <= 0) {
+      clearInterval(countdownInterval);
+      endGame();
+    }
+  }, 1000);
+}
+
+function endGame() {
+  scoreContainer.removeChild(scoreBox);
+  scoreContainer.removeChild(counterTargetHit);
+
+  accuracyContainer.removeChild(accuracyBox);
+  accuracyContainer.removeChild(counterTotalShot);
+
+  weaponContainer.removeChild(weaponBox);
+  weaponContainer.removeChild(weaponName);
+
+  document.body.removeChild(countdownTimer);
+  document.body.removeChild(verticalBar);
+  document.body.removeChild(horizontalBar);
+
+  showGameOverScreen();
+  scoreDiv.innerHTML = `Score: ${countHit}`;
+  accuracyDiv.innerHTML = `Accuracy: ${accuracy}%`;
+  document.removeEventListener("pointerdown", handlePointerDown);
+  window.removeEventListener("keydown", keyDown);
+  window.removeEventListener("keyup", keyUp);
+  endGameFlag = true;
+  controls.unlock();
+}
+
+// Ánh sáng mặt trời
 function getDirectionLight(intensity) {
   var light = new THREE.DirectionalLight(0xffffff, intensity);
   light.castShadow = true; // Đổ bóng
@@ -336,67 +680,223 @@ function getDirectionLight(intensity) {
   return light;
 }
 
-function getMaterial(type, color) {
-  var selectedMaterial;
-  var materialOptions = {
-    color: color === undefined ? "rgb(255,255,255)" : color,
-  };
+function handlePointerDown(event) {
+  if (
+    event.pointerType === "mouse" &&
+    event.button === 0 &&
+    player.canShoot <= 0
+  ) {
+    player.canShoot = 10;
+    var bullet = new THREE.Mesh(
+      new THREE.SphereGeometry(0.03, 8, 8),
+      new THREE.MeshBasicMaterial({ color: 0xffffff })
+    );
 
-  switch (type) {
-    case "basic":
-      selectedMaterial = new THREE.MeshBasicMaterial(materialOptions);
-      break;
-    case "lambert":
-      selectedMaterial = new THREE.MeshLambertMaterial(materialOptions);
-      break;
-    case "phong":
-      selectedMaterial = new THREE.MeshPhongMaterial(materialOptions);
-      break;
-    case "standard":
-      selectedMaterial = new THREE.MeshStandardMaterial(materialOptions);
-      break;
-    default:
-      selectedMaterial = new THREE.MeshBasicMaterial(materialOptions);
-      break;
+    var vector = new THREE.Vector3(-0.03, 0.035, -1);
+    vector.applyQuaternion(controls.getObject().quaternion);
+
+    bullet.position.set(
+      meshes["playerWeapon"].position.x, //+ vector.x,
+      meshes["playerWeapon"].position.y + 0.5, //+ vector.y,
+      meshes["playerWeapon"].position.z //+ vector.z
+    );
+
+    bullet.velocity = vector;
+
+    bullet.alive = true;
+    setTimeout(function () {
+      bullet.alive = false;
+      scene.remove(bullet);
+    }, 1000);
+
+    bullets.push(bullet);
+
+    scene.add(bullet);
+    totalShot++;
+
+    // Play gunshot sound
+    playGunshotSound();
   }
-  return selectedMaterial;
 }
 
-function getplaneMaterial(type, color) {
-  var selectedMaterial;
-  var materialOptions = {
-    color: color === undefined ? "rgb(255,255,255)" : color,
-    side: THREE.DoubleSide,
-  };
+function loadUI() {
+  // Add crosshair
+  const crosshair = document.createElement("div");
+  crosshair.style.position = "absolute";
 
-  switch (type) {
-    case "basic":
-      selectedMaterial = new THREE.MeshBasicMaterial(materialOptions);
-      break;
-    case "lambert":
-      selectedMaterial = new THREE.MeshLambertMaterial(materialOptions);
-      break;
-    case "phong":
-      selectedMaterial = new THREE.MeshPhongMaterial(materialOptions);
-      break;
-    case "standard":
-      selectedMaterial = new THREE.MeshStandardMaterial(materialOptions);
-      break;
-    default:
-      selectedMaterial = new THREE.MeshBasicMaterial(materialOptions);
-      break;
+  crosshair.style.width = "10px";
+  crosshair.style.height = "10px";
+  crosshair.style.left = "50%";
+  crosshair.style.top = "50%";
+  crosshair.style.transform = "translate(-50%, -50%)";
+
+  horizontalBar = document.createElement("div");
+  horizontalBar.style.position = "absolute";
+  horizontalBar.style.width = "14px"; // Chiều dài của thanh ngang
+  horizontalBar.style.height = "2px"; // Độ dày của thanh ngang
+  horizontalBar.style.backgroundColor = "white";
+  horizontalBar.style.left = "50%";
+  horizontalBar.style.top = "50%";
+  horizontalBar.style.transform = "translate(-50%, -50%)";
+
+  verticalBar = document.createElement("div");
+  verticalBar.style.position = "absolute";
+  verticalBar.style.width = "2px"; // Độ dày của thanh dọc
+  verticalBar.style.height = "14px"; // Chiều dài của thanh dọc
+  verticalBar.style.backgroundColor = "white";
+  verticalBar.style.left = "50%";
+  verticalBar.style.top = "50%";
+  verticalBar.style.transform = "translate(-50%, -50%)";
+
+  document.body.appendChild(horizontalBar);
+  document.body.appendChild(verticalBar);
+
+  // Add Score
+  scoreContainer = document.getElementById("score-container");
+  counterTargetHit = document.createElement("div");
+  counterTargetHit.style.position = "absolute";
+  counterTargetHit.style.width = "200px";
+  counterTargetHit.style.height = "50px";
+  counterTargetHit.style.color = "#ffffff";
+  counterTargetHit.style.left = "30%";
+  counterTargetHit.style.top = "4%";
+  counterTargetHit.style.fontSize = "20px";
+  counterTargetHit.style.fontWeight = "bold";
+  counterTargetHit.innerHTML = `Score`;
+  scoreContainer.appendChild(counterTargetHit);
+
+  // Add a box under Score
+  scoreBox = document.createElement("div");
+  scoreBox.style.background =
+    "linear-gradient(180deg, rgba(20,182,144,1) 0%, rgba(1,17,13,0.6226685796269728) 40%)";
+  scoreBox.style.position = "absolute";
+  scoreBox.style.fontWeight = "bold";
+  scoreBox.style.width = "160px";
+  scoreBox.style.height = "40px";
+  scoreBox.style.color = "#ffffff";
+  scoreBox.style.left = "30%";
+  scoreBox.style.top = "8%"; // Adjust the top position to place it below counterTargetHit
+  scoreBox.style.fontSize = "20px";
+  scoreBox.style.display = "flex";
+  scoreBox.style.alignItems = "center";
+  scoreBox.style.justifyContent = "center";
+  scoreBox.style.border = "2px solid #14b690"; // Optional: Add a border to the box
+  scoreBox.style.padding = "10px"; // Optional: Add padding inside the box
+  scoreBox.style.borderRadius = "4px";
+  scoreBox.style.borderBottomLeftRadius = "40px";
+  scoreBox.innerHTML = `${countHit}`;
+  scoreContainer.appendChild(scoreBox);
+
+  // Add Accuracy
+  accuracyContainer = document.getElementById("accuracy-container");
+  counterTotalShot = document.createElement("div");
+  counterTotalShot.style.position = "absolute";
+  counterTotalShot.style.width = "200px";
+  counterTotalShot.style.height = "50px";
+  counterTotalShot.style.color = "#ffffff";
+  counterTotalShot.style.right = "23%";
+  counterTotalShot.style.top = "4%";
+  counterTotalShot.style.fontSize = "20px";
+  counterTotalShot.style.fontWeight = "bold";
+  counterTotalShot.innerHTML = `Accuracy`;
+  accuracyContainer.appendChild(counterTotalShot);
+
+  // Add a box under Accuracy
+  accuracyBox = document.createElement("div");
+  accuracyBox.style.background =
+    "linear-gradient(180deg, rgba(84,104,213,1) 0%, rgba(1,17,13,0.6226685796269728) 36%)";
+  accuracyBox.style.position = "absolute";
+  accuracyBox.style.fontWeight = "bold";
+  accuracyBox.style.width = "160px";
+  accuracyBox.style.height = "40px";
+  accuracyBox.style.color = "#ffffff";
+  accuracyBox.style.right = "30%";
+  accuracyBox.style.top = "8%"; // Adjust the top position to place it below counterTargetHit
+  accuracyBox.style.fontSize = "20px";
+  accuracyBox.style.display = "flex";
+  accuracyBox.style.alignItems = "center";
+  accuracyBox.style.justifyContent = "center";
+  accuracyBox.style.border = "2px solid #5468d5"; // Optional: Add a border to the box
+  accuracyBox.style.padding = "10px"; // Optional: Add padding inside the box
+  accuracyBox.style.borderRadius = "4px";
+  accuracyBox.style.borderBottomRightRadius = "40px";
+  accuracyBox.innerHTML = `0`;
+  accuracyContainer.appendChild(accuracyBox);
+
+  // Add Weapon HTML
+  weaponContainer = document.getElementById("weapon-container");
+  weaponName = document.createElement("div");
+  weaponName.style.position = "absolute";
+  weaponName.style.width = "200px";
+  weaponName.style.height = "50px";
+  weaponName.style.color = "#ffffff";
+  weaponName.style.left = "4%";
+  weaponName.style.bottom = "10%";
+  weaponName.style.fontSize = "20px";
+  weaponName.style.fontWeight = "bold";
+  weaponName.innerHTML = `Glock`;
+  weaponContainer.appendChild(weaponName);
+
+  // Add a box under Weapon
+  weaponBox = document.createElement("div");
+  weaponBox.style.background =
+    "linear-gradient(180deg, rgba(84,104,213,1) 0%, rgba(1,17,13,0.6226685796269728) 36%)";
+  weaponBox.style.position = "absolute";
+  weaponBox.style.fontWeight = "bold";
+  weaponBox.style.width = "160px";
+  weaponBox.style.height = "40px";
+  weaponBox.style.color = "#ffffff";
+  weaponBox.style.left = "4%";
+  weaponBox.style.bottom = "4%"; // Adjust the top position to place it below counterTargetHit
+  weaponBox.style.fontSize = "20px";
+  weaponBox.style.display = "flex";
+  weaponBox.style.alignItems = "center";
+  weaponBox.style.justifyContent = "center";
+  weaponBox.style.border = "2px solid #5468d5"; // Optional: Add a border to the box
+  weaponBox.style.padding = "10px"; // Optional: Add padding inside the box
+  weaponBox.style.borderRadius = "4px";
+  weaponBox.style.borderBottomLeftRadius = "40px";
+  weaponContainer.appendChild(weaponBox);
+
+  // Create an img element
+  let weaponImage = document.createElement("img");
+  weaponImage.src = "./assets/img/gun_icon.png"; // Replace with the path to your image
+  weaponImage.style.width = "40px"; // Set the width of the image
+  weaponImage.style.height = "40px"; // Set the height of the image
+
+  //   Add the image to the weaponBox
+  weaponBox.appendChild(weaponImage);
+
+  // Add Countdown Timer
+  countdownTimer = document.createElement("div");
+  countdownTimer.style.position = "absolute";
+  countdownTimer.style.width = "200px";
+  countdownTimer.style.height = "50px";
+  countdownTimer.style.color = "#ffffff";
+  countdownTimer.style.left = "50%";
+  countdownTimer.style.top = "10%";
+  countdownTimer.style.fontSize = "20px";
+  countdownTimer.style.fontWeight = "bold";
+  countdownTimer.innerHTML = countdownTime;
+  document.body.appendChild(countdownTimer);
+  startCountdown();
+}
+
+// Hàm để hiển thị màn hình overlay khi hết thời gian
+function showGameOverScreen() {
+  overlay.style.display = "flex"; // Hiển thị màn hình overlay
+  // Tắt sự kiện chơi tiếp ở đây
+}
+
+function restartGame() {
+  // Dọn dẹp tất cả các đối tượng trong scene
+  while (scene.children.length > 0) {
+    scene.remove(scene.children[0]);
   }
-  return selectedMaterial;
+
+  location.reload();
+  // Ẩn overlay
+  overlay.style.display = "none";
 }
 
-// Đây là nguồn sáng tự nhiên, sẽ giống như khi phòng ta vào ban ngày, không phải nguồn sáng chính xác
-// như ánh sáng từ mặt trời hoặc đèn, mà thay vào đó nó đại diện cho ánh sáng phản xạ từ các bề mặt
-// xung quanh trong không gian. (nhớ là KHÔNG CÓ ĐỔ BÓNG)
-function getAmbientLight(intensity) {
-  var light = new THREE.AmbientLight("rgb(10,30,50)", intensity);
-  // light.castShadow = true; // trong AmbientLight sẽ không có đổ bóng
-  return light;
-}
-
-// Khởi tạo scene
-var scene = init();
+window.onload = init;
