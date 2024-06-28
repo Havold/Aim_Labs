@@ -1,5 +1,4 @@
 # Aim Labs 🔫 
-# Three.js Game Project
 
 This project is a 3D game developed using Three.js. It involves loading various 3D models, setting up a game environment, and handling user interactions.
 
