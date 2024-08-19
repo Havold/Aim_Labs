@@ -58,3 +58,6 @@ This will start a local development server, and you can view the game in your br
 - OBJLoader
 - MTLLoader
 - FBXLoader
+
+## Demo
+![AIMLABS DEMO](demo.gif)
